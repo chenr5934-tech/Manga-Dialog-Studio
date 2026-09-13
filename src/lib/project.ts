@@ -44,6 +44,23 @@ export const DEFAULT_BACKDROP_COLOR = "#f4f5f7";
 // 预设实例化到画布时，气泡宽度占画布宽度的比例
 export const PRESET_CANVAS_WIDTH_RATIO = 0.34;
 
+// 对话框尺寸：下限对所有途径生效（滑条 / 数字输入 / 画布拖拽）；
+// 上限只是滑条的可视范围，手动输入不受限制。
+export const BUBBLE_SIZE_MIN = 30;
+export const BUBBLE_SLIDER_MAX = 1000;
+
+export function normalizeBubbleSize(value: number): number {
+  if (!Number.isFinite(value)) {
+    return BUBBLE_SIZE_MIN;
+  }
+  return Math.max(BUBBLE_SIZE_MIN, Math.round(value));
+}
+
+// 滑条位置：实际值超过滑条上限时停在末端，不回写、不篡改真实尺寸
+export function toSliderValue(value: number): number {
+  return Math.min(BUBBLE_SLIDER_MAX, normalizeBubbleSize(value));
+}
+
 export function createCanvasFromPreset(preset: CanvasPreset = "A4"): CanvasConfig {
   const picked = CANVAS_PRESETS[preset];
   return {
@@ -101,8 +118,8 @@ export function createBubble(type: BubbleType = "rect", input: Partial<Bubble> =
     type: safeType,
     x: safeX,
     y: safeY,
-    width: Math.max(30, safeWidth),
-    height: Math.max(30, safeHeight),
+    width: normalizeBubbleSize(safeWidth),
+    height: normalizeBubbleSize(safeHeight),
     text: input.text ?? "输入文字",
     direction: input.direction === "vertical" ? "vertical" : "horizontal",
     fontSize: Math.max(8, safeFontSize),
@@ -130,8 +147,9 @@ export function createBubbleFromPreset(
 ): Bubble {
   const targetWidth = Math.max(40, canvas.width * PRESET_CANVAS_WIDTH_RATIO);
   const scale = targetWidth / Math.max(1, preset.width);
-  const width = Math.round(preset.width * scale);
-  const height = Math.round(preset.height * scale);
+  // 预设实例化跟随画布比例，不设上限；仅保证不低于最小尺寸
+  const width = normalizeBubbleSize(preset.width * scale);
+  const height = normalizeBubbleSize(preset.height * scale);
 
   return createBubble(preset.type === "image" ? "image" : preset.type, {
     x: Math.round(anchor.x - width / 2),

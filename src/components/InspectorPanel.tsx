@@ -24,6 +24,12 @@ import {
   ResizeEdge,
   resizeVisibleCropFromEdgeWithRatio
 } from "../lib/cropGeometry";
+import {
+  BUBBLE_SIZE_MIN,
+  BUBBLE_SLIDER_MAX,
+  normalizeBubbleSize,
+  toSliderValue
+} from "../lib/project";
 import { getActivePage, useEditorStore } from "../lib/store";
 import { resolveBubbleOpacity } from "./BubbleVisual";
 
@@ -293,6 +299,59 @@ function EditableCropFrame({
           onPointerDown={onResizeStart(edge)}
         />
       ))}
+    </div>
+  );
+}
+
+function SizeSliderField({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const exceedsSlider = value > BUBBLE_SLIDER_MAX;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className={labelClass}>{label}</span>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            className="studio-input h-7 w-24 px-2 text-right text-xs"
+            min={BUBBLE_SIZE_MIN}
+            step={1}
+            value={Math.round(value)}
+            data-bubble-size-input={label}
+            onChange={(event) => onChange(normalizeBubbleSize(Number(event.target.value)))}
+          />
+          <span className="text-[10px] text-[var(--text-secondary)]">px</span>
+        </div>
+      </div>
+
+      <input
+        type="range"
+        min={BUBBLE_SIZE_MIN}
+        max={BUBBLE_SLIDER_MAX}
+        step={1}
+        value={toSliderValue(value)}
+        data-bubble-size-slider={label}
+        title={`滑条范围 ${BUBBLE_SIZE_MIN} – ${BUBBLE_SLIDER_MAX}，需要更大可直接在右侧输入`}
+        onChange={(event) => onChange(normalizeBubbleSize(Number(event.target.value)))}
+        className="w-full accent-[var(--accent)]"
+      />
+
+      <div className="flex justify-between text-[10px] text-[var(--text-secondary)]">
+        <span>{BUBBLE_SIZE_MIN}</span>
+        <span>
+          {exceedsSlider
+            ? `${BUBBLE_SLIDER_MAX}（当前 ${Math.round(value)}，已超出滑条范围）`
+            : BUBBLE_SLIDER_MAX}
+        </span>
+      </div>
     </div>
   );
 }
@@ -1105,8 +1164,8 @@ function BubbleInspector({ bubble }: { bubble: Bubble }) {
 
         <NumberField label="X" value={bubble.x} onChange={(value) => patch({ x: value })} />
         <NumberField label="Y" value={bubble.y} onChange={(value) => patch({ y: value })} />
-        <NumberField label="宽度" value={bubble.width} min={30} onChange={(value) => patch({ width: value })} />
-        <NumberField label="高度" value={bubble.height} min={30} onChange={(value) => patch({ height: value })} />
+        <SizeSliderField label="宽度" value={bubble.width} onChange={(value) => patch({ width: value })} />
+        <SizeSliderField label="高度" value={bubble.height} onChange={(value) => patch({ height: value })} />
       </div>
 
       <div className={sectionClass}>

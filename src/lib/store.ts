@@ -12,6 +12,7 @@ import {
 import { shouldPreserveImageTransparency } from "./imageFormat";
 import {
   clamp,
+  normalizeBubbleSize,
   createBubble as createBubbleFactory,
   createBubbleFromPreset,
   createBubblePresetFromBubble,
@@ -2414,8 +2415,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             ...patch,
             x: patch.x === undefined ? bubble.x : patch.x,
             y: patch.y === undefined ? bubble.y : patch.y,
-            width: patch.width === undefined ? bubble.width : Math.max(30, patch.width),
-            height: patch.height === undefined ? bubble.height : Math.max(30, patch.height),
+            width: patch.width === undefined ? bubble.width : normalizeBubbleSize(patch.width),
+            height: patch.height === undefined ? bubble.height : normalizeBubbleSize(patch.height),
             fontSize: patch.fontSize === undefined ? bubble.fontSize : Math.max(8, patch.fontSize),
             textColor: nextTextColor,
             borderWidth: patch.borderWidth === undefined ? bubble.borderWidth : Math.max(0, patch.borderWidth)

@@ -21,7 +21,7 @@ import {
   updatePanelShapeHandle
 } from "../lib/panelGeometry";
 import { drawPanelPath, getPanelImageLayout } from "../lib/panelRender";
-import { DEFAULT_BACKDROP_COLOR } from "../lib/project";
+import { DEFAULT_BACKDROP_COLOR, normalizeBubbleSize } from "../lib/project";
 import { PRESET_DND_MIME } from "../lib/dnd";
 import { getActivePage, useEditorStore } from "../lib/store";
 import { BubbleShapeLayer, BubbleTextLayer, resolveBubbleOpacity } from "./BubbleVisual";
@@ -1114,8 +1114,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                     }}
                     onTransformEnd={(event) => {
                       const node = event.target;
-                      let nextWidth = Math.max(30, node.width() * node.scaleX());
-                      let nextHeight = Math.max(30, node.height() * node.scaleY());
+                      let nextWidth = normalizeBubbleSize(node.width() * node.scaleX());
+                      let nextHeight = normalizeBubbleSize(node.height() * node.scaleY());
                       if (snapSizeTo16) {
                         nextWidth = snapSize(nextWidth, 30);
                         nextHeight = snapSize(nextHeight, 30);
