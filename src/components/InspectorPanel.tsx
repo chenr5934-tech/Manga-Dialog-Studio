@@ -17,10 +17,12 @@ import {
   clampNumber,
   createCenteredVisibleCropWithRatio,
   createStoredCropDraft,
+  CropCorner,
   CropDraft,
   expandCropAroundCenter,
   getVisibleCropFromStoredCrop,
   moveVisibleCropWithinBounds,
+  resizeVisibleCropFromCorner,
   ResizeEdge,
   resizeVisibleCropFromEdgeWithRatio
 } from "../lib/cropGeometry";
@@ -49,7 +51,10 @@ const colorSwatchClass =
   "flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--line-soft)] shadow-[0_8px_18px_rgba(2,6,23,0.14)] transition hover:-translate-y-0.5";
 const cropOverlaySvgClass = "absolute inset-0 block h-full w-full overflow-visible";
 const cropHandleClass =
-  "absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-100 bg-cyan-400 shadow-[0_0_0_1px_rgba(34,211,238,0.35)]";
+  "absolute z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-100 bg-cyan-400 shadow-[0_0_0_1px_rgba(34,211,238,0.35)]";
+// 角手柄用方块区分于边中点的圆形手柄，尺寸也略大，便于抓取
+const cropCornerHandleClass =
+  "absolute z-10 h-5 w-5 -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-sm border-2 border-white bg-cyan-500 shadow-[0_1px_4px_rgba(8,47,73,0.45)] active:cursor-grabbing";
 const TRANSPARENT_BUBBLE_BACKGROUND = "rgba(255,255,255,0)";
 const WHITE_BUBBLE_BACKGROUND = "#ffffff";
 const TRANSPARENCY_GRID_STYLE = {
@@ -72,6 +77,12 @@ type CropDragState =
       pointerId: number;
       edge: ResizeEdge;
       startCrop: CropDraft;
+    }
+  | {
+      kind: "resizeCorner";
+      pointerId: number;
+      corner: CropCorner;
+      startCrop: CropDraft;
     };
 
 type CropShapePreview = {
@@ -82,6 +93,7 @@ type CropShapePreview = {
 
 type CropEdge = {
   edge: ResizeEdge;
+  corner: CropCorner;
   start: Point;
   end: Point;
   mid: Point;
@@ -96,6 +108,8 @@ type CropOverlayStyle = {
 
 // 边名按顺序循环使用；顶点数由实际形状决定，多边形分镜按 N 边闭环
 const CROP_EDGE_ORDER: ResizeEdge[] = ["top", "right", "bottom", "left"];
+// 每条边的起点即为该处顶角，顺序与 CROP_EDGE_ORDER 对应
+const CROP_CORNER_ORDER: CropCorner[] = ["topLeft", "topRight", "bottomRight", "bottomLeft"];
 
 function toNaturalPoint(
   event: PointerEvent<Element>,
@@ -139,6 +153,10 @@ function endPointerCapture(overlay: HTMLDivElement | null, pointerId: number) {
   overlay.releasePointerCapture(pointerId);
 }
 
+function getCornerCursor(corner: CropCorner) {
+  return corner === "topLeft" || corner === "bottomRight" ? "nwse-resize" : "nesw-resize";
+}
+
 function getHandleCursor(edge: ResizeEdge) {
   if (edge === "left" || edge === "right") {
     return "ew-resize";
@@ -158,6 +176,18 @@ function updateDraftForDragState(
     const deltaX = point.x - dragState.startPoint.x;
     const deltaY = point.y - dragState.startPoint.y;
     return moveVisibleCropWithinBounds(dragState.startCrop, deltaX, deltaY, naturalWidth, naturalHeight, frameRatio, zoom);
+  }
+
+  if (dragState.kind === "resizeCorner") {
+    return resizeVisibleCropFromCorner(
+      dragState.startCrop,
+      dragState.corner,
+      point,
+      naturalWidth,
+      naturalHeight,
+      frameRatio,
+      zoom
+    );
   }
 
   return resizeVisibleCropFromEdgeWithRatio(dragState.startCrop, dragState.edge, point, naturalWidth, naturalHeight, frameRatio, zoom);
@@ -190,6 +220,7 @@ function buildCropEdges(normalizedPoints: Point[]): CropEdge[] {
 
     return {
       edge: CROP_EDGE_ORDER[index % CROP_EDGE_ORDER.length],
+      corner: CROP_CORNER_ORDER[index % CROP_CORNER_ORDER.length],
       start,
       end,
       mid: getEdgeMidpoint(start, end)
@@ -248,16 +279,18 @@ function EditableCropFrame({
   svgPoints,
   cropEdges,
   onMoveStart,
-  onResizeStart
+  onResizeStart,
+  onCornerResizeStart
 }: {
   style: CropOverlayStyle;
   svgPoints: string;
   cropEdges: CropEdge[];
   onMoveStart: (event: PointerEvent<Element>) => void;
   onResizeStart: (edge: ResizeEdge) => (event: PointerEvent<Element>) => void;
+  onCornerResizeStart: (corner: CropCorner) => (event: PointerEvent<Element>) => void;
 }) {
   return (
-    <div className="absolute" style={style}>
+    <div className="absolute" style={style} data-crop-frame="1">
       <svg className={cropOverlaySvgClass} viewBox="0 0 100 100" preserveAspectRatio="none">
         <polygon
           points={svgPoints}
@@ -290,6 +323,7 @@ function EditableCropFrame({
       {cropEdges.map(({ edge, mid }) => (
         <div
           key={`${edge}-handle`}
+          data-crop-edge-handle={edge}
           className={cropHandleClass}
           style={{
             left: `${mid.x * 100}%`,
@@ -297,6 +331,20 @@ function EditableCropFrame({
             cursor: getHandleCursor(edge)
           }}
           onPointerDown={onResizeStart(edge)}
+        />
+      ))}
+
+      {cropEdges.map(({ corner, start }) => (
+        <div
+          key={`${corner}-corner`}
+          className={cropCornerHandleClass}
+          data-crop-corner={corner}
+          style={{
+            left: `${start.x * 100}%`,
+            top: `${start.y * 100}%`,
+            cursor: getCornerCursor(corner)
+          }}
+          onPointerDown={onCornerResizeStart(corner)}
         />
       ))}
     </div>
@@ -563,6 +611,22 @@ function VisualCropModal({ panel, open, onClose }: { panel: Panel; open: boolean
     beginPointerCapture(overlayRef.current, event.pointerId);
   };
 
+  const startCornerResize = (corner: CropCorner) => (event: PointerEvent<Element>) => {
+    if (!isMainPointer(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    setDragState({
+      kind: "resizeCorner",
+      pointerId: event.pointerId,
+      corner,
+      startCrop: draft
+    });
+    beginPointerCapture(overlayRef.current, event.pointerId);
+  };
+
   const startResize = (edge: ResizeEdge) => (event: PointerEvent<Element>) => {
     if (!isMainPointer(event)) {
       return;
@@ -651,14 +715,14 @@ function VisualCropModal({ panel, open, onClose }: { panel: Panel; open: boolean
         </div>
 
         <p className="mt-2 text-xs text-[var(--text-secondary)]">
-          蓝色主梯形表示分镜里真正能看到的图像区域；拖动内部可移动，拖动四条边上的控制点可缩放。形状会跟随当前分镜梯形，实际可见区域的比例固定为 {frameRatioText}。
+          蓝色主梯形表示分镜里真正能看到的图像区域；拖动内部可移动，拖拽四个角的方块可自由缩放，拖拽四边中点的圆点可单独推动某条边。形状会跟随当前分镜梯形，实际可见区域的比例固定为 {frameRatioText}。
         </p>
         {storedPreviewStyle ? (
           <p className="mt-1 text-xs text-[var(--text-secondary)]">当前图片缩放为 {cropZoom.toFixed(2)}x，外层虚线梯形表示为保留这块可见区域而实际保存的 crop 缓冲范围。</p>
         ) : null}
 
         <div
-          className="relative mx-auto mt-4 overflow-hidden rounded-xl border border-[var(--line-soft)] bg-slate-950 shadow-[0_16px_46px_rgba(2,6,23,0.55)]"
+          className="relative mx-auto mt-4 rounded-xl border border-[var(--line-soft)] bg-slate-950 shadow-[0_16px_46px_rgba(2,6,23,0.55)]"
           style={{
             width: displayWidth,
             height: displayHeight,
@@ -668,7 +732,7 @@ function VisualCropModal({ panel, open, onClose }: { panel: Panel; open: boolean
           <img
             src={panel.image.original}
             alt="crop-source"
-            className="block select-none"
+            className="block select-none rounded-xl"
             draggable={false}
             style={{ width: displayWidth, height: displayHeight }}
           />
@@ -687,6 +751,7 @@ function VisualCropModal({ panel, open, onClose }: { panel: Panel; open: boolean
               cropEdges={cropEdges}
               onMoveStart={startMove}
               onResizeStart={startResize}
+              onCornerResizeStart={startCornerResize}
             />
           </div>
         </div>

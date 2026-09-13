@@ -4,6 +4,8 @@ import { Point } from "./panelGeometry";
 export type CropDraft = Omit<CropConfig, "scale">;
 export type ResizeEdge = "left" | "right" | "top" | "bottom";
 
+export type CropCorner = "topLeft" | "topRight" | "bottomRight" | "bottomLeft";
+
 export function clampNumber(value: number, min: number, max: number): number {
   if (Number.isNaN(value)) {
     return min;
@@ -143,6 +145,48 @@ export function normalizeVisibleCropToRatio(
   const clampedCenterX = clampNumber(center.x, (width * safeZoom) / 2, naturalWidth - (width * safeZoom) / 2);
   const clampedCenterY = clampNumber(center.y, (height * safeZoom) / 2, naturalHeight - (height * safeZoom) / 2);
   return createCropFromCenter(clampedCenterX, clampedCenterY, width, height);
+}
+
+// 角拖拽：以对角为锚点等比缩放。
+// 保持比例是刻意的——裁剪结果要填满分镜形状，自由拉伸会让画面变形。
+export function resizeVisibleCropFromCorner(
+  initial: CropDraft,
+  corner: CropCorner,
+  point: Point,
+  naturalWidth: number,
+  naturalHeight: number,
+  ratio: number,
+  zoom: number
+): CropDraft {
+  const safeRatio = Math.max(0.001, ratio);
+  const safeZoom = clampNumber(zoom, 1, 4);
+
+  const isLeft = corner === "topLeft" || corner === "bottomLeft";
+  const isTop = corner === "topLeft" || corner === "topRight";
+
+  // 对角保持不动
+  const anchorX = isLeft ? initial.x + initial.width : initial.x;
+  const anchorY = isTop ? initial.y + initial.height : initial.y;
+
+  const deltaX = Math.abs(point.x - anchorX);
+  const deltaY = Math.abs(point.y - anchorY);
+
+  // 取两个方向中较大的一侧作为基准，保证指针始终落在角上或框内
+  const width = Math.max(1, Math.max(deltaX, deltaY * safeRatio));
+  const height = Math.max(1, width / safeRatio);
+
+  return normalizeVisibleCropToRatio(
+    {
+      x: isLeft ? anchorX - width : anchorX,
+      y: isTop ? anchorY - height : anchorY,
+      width,
+      height
+    },
+    naturalWidth,
+    naturalHeight,
+    safeRatio,
+    safeZoom
+  );
 }
 
 export function moveVisibleCropWithinBounds(

@@ -2,7 +2,7 @@ import { Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, 
 import Konva from "konva";
 import { Circle, Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Shape, Stage, Text, Transformer } from "react-konva";
 import useImage from "use-image";
-import { Bubble, Panel, ProjectPage } from "../types";
+import { Bubble, Panel, PanelPoint, ProjectPage } from "../types";
 import { shouldPreserveImageTransparency } from "../lib/imageFormat";
 import {
   PANEL_EDGE_HANDLE_KEYS,
@@ -15,6 +15,7 @@ import {
   getPanelRenderTransform,
   getPanelShapeGuideLines,
   getPanelShapeHandlePoint,
+  getPolygonBounds,
   normalizePanelRotation,
   normalizePanelShape,
   updatePanelEdgeHandle,
@@ -102,6 +103,9 @@ const EDGE_HANDLE_CORNER_RADIUS = 8;
 const SKEW_HANDLE_COLOR = "#2563eb";
 const SKEW_GUIDE_COLOR = "rgba(37, 99, 235, 0.35)";
 const TRANSFORMER_ANCHOR_SIZE = 18;
+// 顶点手柄按屏幕尺寸恒定绘制，缩放画布时也保持好点
+const POLYGON_HANDLE_SCREEN_RADIUS = 13;
+const POLYGON_HANDLE_HIT_SCREEN_WIDTH = 30;
 
 function PageBackgroundLayer({ page }: { page: ProjectPage }) {
   const [image] = useImage(page.background?.original ?? "", "anonymous");
@@ -196,6 +200,133 @@ function PanelImageLayer({ panel }: { panel: Panel }) {
         crop={imageLayout.cropRect}
         listening={false}
       />
+    </Group>
+  );
+}
+
+// 多边形分镜的顶点编辑：每个顶点一个可拖拽手柄，拖动时实时预览、松手后收紧包围盒
+function PolygonVertexHandles({
+  panel,
+  zoom,
+  onDraftChange,
+  onCommit
+}: {
+  panel: Panel;
+  zoom: number;
+  onDraftChange: (patch: Partial<Panel>) => void;
+  onCommit: (patch: Partial<Panel>) => void;
+}) {
+  const points = panel.points ?? [];
+  const transform = getPanelRenderTransform(panel);
+  const radius = POLYGON_HANDLE_SCREEN_RADIUS / Math.max(0.01, zoom);
+  const hitWidth = POLYGON_HANDLE_HIT_SCREEN_WIDTH / Math.max(0.01, zoom);
+
+  if (points.length < 3) {
+    return null;
+  }
+
+  const localPoints = points.map((point) => ({
+    x: point.x * panel.width,
+    y: point.y * panel.height
+  }));
+
+  const getLocalPointer = (node: Konva.Node): Point | null => {
+    const parent = node.getParent();
+    const stage = node.getStage();
+    const pointer = stage?.getPointerPosition();
+    if (!parent || !pointer) {
+      return null;
+    }
+    return parent.getAbsoluteTransform().copy().invert().point(pointer);
+  };
+
+  const movedPoints = (index: number, local: Point) =>
+    localPoints.map((point, i) => (i === index ? { x: local.x, y: local.y } : point));
+
+  const toNormalized = (list: Point[], width: number, height: number): PanelPoint[] =>
+    list.map((point) => ({
+      x: point.x / Math.max(1, width),
+      y: point.y / Math.max(1, height)
+    }));
+
+  const commitVertex = (index: number, local: Point) => {
+    const next = movedPoints(index, local);
+    const rotation = normalizePanelRotation(panel.rotation);
+
+    // 旋转过的分镜需要额外的坐标补偿，这里只在未旋转时收紧包围盒，
+    // 其余情况直接写回归一化顶点，渲染依然正确
+    if (Math.abs(rotation) > 0.001) {
+      onCommit({ points: toNormalized(next, panel.width, panel.height) });
+      return;
+    }
+
+    const bounds = getPolygonBounds(next);
+    onCommit({
+      x: panel.x + bounds.minX,
+      y: panel.y + bounds.minY,
+      width: bounds.width,
+      height: bounds.height,
+      points: next.map((point) => ({
+        x: (point.x - bounds.minX) / bounds.width,
+        y: (point.y - bounds.minY) / bounds.height
+      }))
+    });
+  };
+
+  return (
+    <Group
+      name="panel-polygon-overlay"
+      x={transform.x}
+      y={transform.y}
+      offsetX={transform.offsetX}
+      offsetY={transform.offsetY}
+      rotation={transform.rotation}
+    >
+      <Line
+        points={localPoints.flatMap((point) => [point.x, point.y])}
+        stroke={SKEW_GUIDE_COLOR}
+        strokeWidth={2 / Math.max(0.01, zoom)}
+        dash={[8 / Math.max(0.01, zoom), 5 / Math.max(0.01, zoom)]}
+        closed
+        listening={false}
+      />
+
+      {localPoints.map((point, index) => (
+        <Circle
+          key={`polygon-vertex-${index}`}
+          name="panel-polygon-handle"
+          x={point.x}
+          y={point.y}
+          radius={radius}
+          hitStrokeWidth={hitWidth}
+          fill="#eff6ff"
+          stroke={SKEW_HANDLE_COLOR}
+          strokeWidth={2}
+          draggable
+          onMouseDown={(event) => {
+            event.cancelBubble = true;
+          }}
+          onTouchStart={(event) => {
+            event.cancelBubble = true;
+          }}
+          onDragMove={(event) => {
+            event.cancelBubble = true;
+            const local = getLocalPointer(event.target);
+            if (!local) {
+              return;
+            }
+            onDraftChange({ points: toNormalized(movedPoints(index, local), panel.width, panel.height) });
+          }}
+          onDragEnd={(event) => {
+            event.cancelBubble = true;
+            const local = getLocalPointer(event.target);
+            if (!local) {
+              return;
+            }
+            commitVertex(index, local);
+          }}
+        />
+      ))}
     </Group>
   );
 }
@@ -921,7 +1052,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
             <span className="text-[var(--text-secondary)]">
               {manualPanelMode
                 ? "画布已锁定，拖拽即可取景；已有分镜与气泡不会被拖动"
-                : "画布已锁定，单击加点，回到起点或按 Enter 闭合；已有分镜与气泡不会被拖动"}
+                : "画布已锁定，单击逐个取点；回到起点、按 Enter 或点画布下方的「完成闭合」都能收口"}
             </span>
             <button
               type="button"
@@ -936,6 +1067,35 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
             >
               退出扣选
             </button>
+          </div>
+        </div>
+      )}
+
+      {polygonTool && (
+        <div
+          data-polygon-hint="1"
+          className="shrink-0 border-b border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-2"
+        >
+          <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+            {polygonPoints.length >= 3 ? (
+              <>
+                <span className="text-[var(--text-primary)]">按</span>
+                <kbd className="rounded border border-[var(--line-strong)] bg-[var(--panel-0)] px-2 py-0.5 font-mono text-[11px] font-semibold text-[var(--text-primary)]">
+                  Enter
+                </kbd>
+                <span className="font-semibold text-[var(--text-primary)]">键闭合多边形</span>
+                <button type="button" className="studio-btn studio-btn-primary h-7 px-3 text-[11px]" onClick={commitPolygon}>
+                  完成闭合
+                </button>
+                <button type="button" className="studio-btn h-7 px-2 text-[11px]" onClick={() => setPolygonPoints([])}>
+                  重来
+                </button>
+              </>
+            ) : (
+              <span className="text-[var(--text-primary)]">
+                依次单击取点（已放置 {polygonPoints.length} 个，至少需要 3 个才能闭合）
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -1061,7 +1221,24 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                       <PanelBorderShape panel={displayPanel} selected={selected} />
                     </Group>
 
-                    {selected && !displayPanel.points ? (
+                    {selected && displayPanel.points && !pickingMode ? (
+                      <PolygonVertexHandles
+                        panel={displayPanel}
+                        zoom={zoom}
+                        onDraftChange={(patch) => {
+                          setPanelDraft({
+                            panelId: panel.id,
+                            patch
+                          });
+                        }}
+                        onCommit={(patch) => {
+                          setPanelDraft(null);
+                          updatePanel(panel.id, patch);
+                        }}
+                      />
+                    ) : null}
+
+                    {selected && !displayPanel.points && !pickingMode ? (
                       <PanelSkewHandles
                         panel={displayPanel}
                         onDraftChange={(patch) => {
@@ -1185,7 +1362,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                 anchorSize={TRANSFORMER_ANCHOR_SIZE}
                 keepRatio={false}
                 anchorStyleFunc={styleTransformerAnchor}
-                borderEnabled={!isExporting && selection?.kind === "bubble"}
+                borderEnabled={!isExporting && !pickingMode && selection?.kind === "bubble"}
                 borderStroke="#2563eb"
                 anchorStroke="#2563eb"
                 anchorFill="#bfdbfe"
