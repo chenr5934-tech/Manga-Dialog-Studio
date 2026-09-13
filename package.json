@@ -1,7 +1,8 @@
 {
-  "name": "openkoma",
+  "name": "manga-dialog-studio",
   "version": "0.1.0",
   "private": true,
+  "description": "漫画对话框编辑与分镜制作工具，本地运行",
   "type": "module",
   "scripts": {
     "dev": "vite",

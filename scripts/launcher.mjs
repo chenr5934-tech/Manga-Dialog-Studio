@@ -11,7 +11,9 @@ if (process.platform === "win32") {
 process.title = "漫画对话工坊";
 
 function run(command, args) {
-  const result = spawnSync(command, args, { stdio: "inherit", shell: true });
+  // Windows 上 npm 是可执行脚本，直接指定 .cmd 调用，避免 shell 拼接带来的弃用警告
+  const executable = process.platform === "win32" ? command + ".cmd" : command;
+  const result = spawnSync(executable, args, { stdio: "inherit" });
   return result.status === 0;
 }
 
@@ -44,4 +46,5 @@ if (needsBuild()) {
 }
 
 console.log("  [3/3] 正在启动本地服务...");
-startServer({ root: "dist", port: 8737, open: true });
+// --no-open 供自动化与 CI 使用，默认仍会自动打开浏览器
+startServer({ root: "dist", port: 8737, open: !process.argv.includes("--no-open") });
