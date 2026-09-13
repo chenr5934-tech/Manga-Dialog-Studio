@@ -80,6 +80,7 @@ type EditorStore = {
   presetEditorBubbleId?: string;
   presetEditorSeed?: BubblePreset;
   importDialogOpen: boolean;
+  presetLibraryOpen: boolean;
   recentTextColors: string[];
   selection?: Selection;
   manualPanelMode: boolean;
@@ -129,6 +130,9 @@ type EditorStore = {
   setStoryboardMode: (mode: StoryboardMode) => void;
   openPresetEditor: (options?: { bubbleId?: string; seed?: BubblePreset }) => void;
   closePresetEditor: () => void;
+
+  openPresetLibrary: () => void;
+  closePresetLibrary: () => void;
 
   openImportDialog: () => void;
   closeImportDialog: () => void;
@@ -1842,6 +1846,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   presetEditorBubbleId: undefined,
   presetEditorSeed: undefined,
   importDialogOpen: false,
+  presetLibraryOpen: false,
   recentTextColors: getInitialRecentTextColors(),
   selection: undefined,
   manualPanelMode: false,
@@ -2491,6 +2496,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }));
   },
 
+  openPresetLibrary: () => {
+    set(() => ({
+      presetLibraryOpen: true
+    }));
+  },
+
+  closePresetLibrary: () => {
+    set(() => ({
+      presetLibraryOpen: false
+    }));
+  },
+
   openImportDialog: () => {
     set(() => ({
       importDialogOpen: true
@@ -2722,11 +2739,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         };
       }
 
-      const nextPresets = [...state.bubblePresets, ...imported];
-      saveUserPresets(nextPresets);
+      const importedIds = new Set(imported.map((preset) => preset.id));
+      const nextPresets = [
+        ...state.bubblePresets.filter((preset) => !importedIds.has(preset.id)),
+        ...imported
+      ];
+      const result = saveUserPresets(nextPresets);
       return {
         bubblePresets: nextPresets,
-        ...withNotice(state, `已导入 ${imported.length} 个预设`)
+        ...withNotice(
+          state,
+          result.ok
+            ? `已载入 ${imported.length} 个预设`
+            : result.message ?? "预设载入失败"
+        )
       };
     });
   },

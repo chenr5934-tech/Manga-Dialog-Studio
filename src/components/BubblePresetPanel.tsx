@@ -44,13 +44,12 @@ export default function BubblePresetPanel() {
   const addBubbleFromPreset = useEditorStore((state) => state.addBubbleFromPreset);
   const deleteBubblePreset = useEditorStore((state) => state.deleteBubblePreset);
   const openPresetEditor = useEditorStore((state) => state.openPresetEditor);
-  const importBubblePresets = useEditorStore((state) => state.importBubblePresets);
+  const openPresetLibrary = useEditorStore((state) => state.openPresetLibrary);
   const exportBubblePresets = useEditorStore((state) => state.exportBubblePresets);
   const setNotice = useEditorStore((state) => state.setNotice);
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
-  const jsonInputRef = useRef<HTMLInputElement | null>(null);
 
   const builtinPresets = bubblePresets.filter((preset) => preset.builtin);
   const userPresets = bubblePresets.filter((preset) => !preset.builtin);
@@ -95,13 +94,6 @@ export default function BubblePresetPanel() {
     } catch {
       setNotice("对话框图片读取失败");
     }
-  };
-
-  const handleImportJson = async (file: File | undefined) => {
-    if (!file) {
-      return;
-    }
-    importBubblePresets(await file.text());
   };
 
   const handleExportJson = () => {
@@ -218,11 +210,22 @@ export default function BubblePresetPanel() {
       </div>
 
       <div className="flex gap-1.5 border-t border-[var(--line-soft)] px-2.5 py-2">
-        <button type="button" className={actionButtonClass} onClick={() => jsonInputRef.current?.click()}>
-          导入预设
+        <button
+          type="button"
+          data-open-preset-library="1"
+          className={`${actionButtonClass} studio-btn-primary`}
+          onClick={() => openPresetLibrary()}
+          title="打开项目目录下的 presets 文件夹，载入或保存整套预设"
+        >
+          预设库文件夹
         </button>
-        <button type="button" className={actionButtonClass} onClick={handleExportJson}>
-          导出预设
+        <button
+          type="button"
+          className={actionButtonClass}
+          onClick={handleExportJson}
+          title="下载为 JSON 文件，便于发给别人"
+        >
+          下载 JSON
         </button>
       </div>
 
@@ -236,16 +239,7 @@ export default function BubblePresetPanel() {
           event.target.value = "";
         }}
       />
-      <input
-        ref={jsonInputRef}
-        type="file"
-        accept="application/json,.json"
-        className="hidden"
-        onChange={(event) => {
-          void handleImportJson(event.target.files?.[0]);
-          event.target.value = "";
-        }}
-      />
+
     </aside>
   );
 }

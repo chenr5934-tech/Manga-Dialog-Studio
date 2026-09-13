@@ -4,6 +4,7 @@ import InspectorPanel from "./components/InspectorPanel";
 import BubblePresetPanel from "./components/BubblePresetPanel";
 import ImportImagesModal from "./components/ImportImagesModal";
 import PresetEditorModal from "./components/PresetEditorModal";
+import PresetLibraryModal from "./components/PresetLibraryModal";
 import ThumbRail from "./components/ThumbRail";
 import Toolbar from "./components/Toolbar";
 import { getActivePage, useEditorStore } from "./lib/store";
@@ -185,6 +186,7 @@ export default function App() {
       </main>
 
       <PresetEditorModal />
+      <PresetLibraryModal />
       <ImportImagesModal />
     </div>
   );

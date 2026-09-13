@@ -39,6 +39,13 @@ export default defineConfig({
     }
   },
   server: {
-    port: 5173
+    port: 5173,
+    // 预设库走本地服务的文件接口，开发模式下需要转发
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:8737",
+        changeOrigin: true
+      }
+    }
   }
 });
