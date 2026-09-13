@@ -2559,8 +2559,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         return state;
       }
 
+      // 扣选属于分镜操作，切到对话编辑时自动收起，
+      // 否则画布会停留在锁定态，导致气泡、分镜都点不动
+      const leavingStoryboard = mode === "dialogue";
+
       return {
         storyboardMode: mode,
+        manualPanelMode: leavingStoryboard ? false : state.manualPanelMode,
+        polygonTool: leavingStoryboard ? false : state.polygonTool,
         ...withNotice(state, mode === "storyboard" ? "已切换到分镜模式" : "已切换到对话编辑模式")
       };
     });
@@ -2769,7 +2775,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         manualPanelMode: nextEnabled,
         polygonTool: nextEnabled ? false : state.polygonTool,
         storyboardMode: nextEnabled ? "storyboard" : state.storyboardMode,
-        ...withNotice(state, nextEnabled ? "矩形扣选已开启：在画布上拖拽即可" : "矩形扣选已关闭")
+        // 进入扣选即清空选中，避免残留的选中框干扰取景
+        selection: nextEnabled ? undefined : state.selection,
+        ...withNotice(
+          state,
+          nextEnabled ? "矩形扣选已开启：画布已锁定，拖拽即可取景（Esc 退出）" : "矩形扣选已关闭"
+        )
       };
     });
   },
@@ -2781,9 +2792,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         polygonTool: nextEnabled,
         manualPanelMode: nextEnabled ? false : state.manualPanelMode,
         storyboardMode: nextEnabled ? "storyboard" : state.storyboardMode,
+        selection: nextEnabled ? undefined : state.selection,
         ...withNotice(
           state,
-          nextEnabled ? "多边形扣选已开启：单击加点，回到起点或按 Enter 闭合" : "多边形扣选已关闭"
+          nextEnabled
+            ? "多边形扣选已开启：画布已锁定，单击加点，回到起点或按 Enter 闭合（Esc 退出）"
+            : "多边形扣选已关闭"
         )
       };
     });

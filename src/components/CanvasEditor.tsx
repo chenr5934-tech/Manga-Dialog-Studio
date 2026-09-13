@@ -380,6 +380,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
   const updateBubble = useEditorStore((state) => state.updateBubble);
   const createPanelFromRect = useEditorStore((state) => state.createPanelFromRect);
   const addBubbleFromPreset = useEditorStore((state) => state.addBubbleFromPreset);
+  const toggleManualPanelMode = useEditorStore((state) => state.toggleManualPanelMode);
+  const togglePolygonTool = useEditorStore((state) => state.togglePolygonTool);
   const createPolygonPanelFromPoints = useEditorStore((state) => state.createPolygonPanelFromPoints);
   const polygonTool = useEditorStore((state) => state.polygonTool);
 
@@ -392,6 +394,11 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
   const [draftStart, setDraftStart] = useState<{ x: number; y: number } | null>(null);
   const [panelDraft, setPanelDraft] = useState<{ panelId: string; patch: Partial<Panel> } | null>(null);
   const [polygonPoints, setPolygonPoints] = useState<{ x: number; y: number }[]>([]);
+  const draftStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  // 扣选期间画布进入锁定态：已有分镜与气泡不响应事件、不可拖动，
+  // 用户在任何位置按下都只会继续扣选，不会误拖底下的内容
+  const pickingMode = manualPanelMode || polygonTool;
 
   const selectedNodeId = useMemo(() => {
     if (!selection) {
@@ -690,8 +697,13 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
       }
 
       if (event.key === "Escape") {
-        setPolygonPoints([]);
-        setNotice("已放弃当前多边形");
+        // 两级退出：先放弃当前绘制，再退出扣选工具
+        if (polygonPoints.length > 0) {
+          setPolygonPoints([]);
+          setNotice("已放弃当前多边形");
+        } else {
+          togglePolygonTool(false);
+        }
         return;
       }
 
@@ -708,10 +720,44 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [createPolygonPanelFromPoints, polygonPoints, polygonTool, setNotice]);
+  }, [createPolygonPanelFromPoints, polygonPoints, polygonTool, setNotice, togglePolygonTool]);
 
+  // 矩形扣选同样支持 Esc：先取消正在拖出的选区，再退出扣选
+  useEffect(() => {
+    if (!manualPanelMode) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName.toLowerCase();
+      if (tag === "input" || tag === "textarea" || target?.isContentEditable) {
+        return;
+      }
+
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      if (draftStartRef.current) {
+        draftStartRef.current = null;
+        setDraftRect(null);
+        setDraftStart(null);
+        setNotice("已取消本次取景");
+      } else {
+        toggleManualPanelMode(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [draftStart, manualPanelMode, setNotice, toggleManualPanelMode]);
+
+  // 拖拽取景是高频交互，起点用 ref 同步保存：
+  // 只靠 React state 的话，极快的拖动会在状态更新前就进入 mousemove，导致丢起点
   const beginManualPanel = (position: { x: number; y: number }) => {
     const scenePoint = toScene(position);
+    draftStartRef.current = scenePoint;
     setDraftStart(scenePoint);
     setDraftRect({ x: scenePoint.x, y: scenePoint.y, width: 0, height: 0 });
   };
@@ -719,6 +765,16 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
   const handleMouseDown = (event: any) => {
     const stage = stageRef.current;
     if (!stage) {
+      return;
+    }
+
+    // 扣选优先于一切元素交互：即使按在已有分镜或气泡上，也从扣选开始
+    if (manualPanelMode) {
+      const pointer = stage.getPointerPosition();
+      if (!pointer) {
+        return;
+      }
+      beginManualPanel(pointer);
       return;
     }
 
@@ -751,20 +807,12 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
       return;
     }
 
-    if (manualPanelMode) {
-      const pointer = stage.getPointerPosition();
-      if (!pointer) {
-        return;
-      }
-      beginManualPanel(pointer);
-      return;
-    }
-
     clearSelection();
   };
 
   const handleMouseMove = () => {
-    if (!manualPanelMode || !draftStart || !stageRef.current) {
+    const start = draftStartRef.current;
+    if (!manualPanelMode || !start || !stageRef.current) {
       return;
     }
 
@@ -775,23 +823,55 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
 
     const scenePoint = toScene(pointer);
     setDraftRect({
-      x: draftStart.x,
-      y: draftStart.y,
-      width: scenePoint.x - draftStart.x,
-      height: scenePoint.y - draftStart.y
+      x: start.x,
+      y: start.y,
+      width: scenePoint.x - start.x,
+      height: scenePoint.y - start.y
     });
   };
 
-  const handleMouseUp = () => {
-    if (!manualPanelMode || !draftRect) {
-      setDraftStart(null);
+  // 松手时指针很可能已经移出画布（尤其是往边缘拖），若只监听 Stage 会丢掉这次取景。
+  // 因此改在 window 上监听，并用容器矩形自行换算场景坐标。
+  useEffect(() => {
+    if (!manualPanelMode) {
       return;
     }
 
-    createPanelFromRect(draftRect.x, draftRect.y, draftRect.width, draftRect.height);
-    setDraftRect(null);
-    setDraftStart(null);
-  };
+    const onWindowMouseUp = (event: MouseEvent) => {
+      const start = draftStartRef.current;
+      if (!start) {
+        return;
+      }
+
+      draftStartRef.current = null;
+      setDraftStart(null);
+      setDraftRect(null);
+
+      const stage = stageRef.current;
+      if (!stage) {
+        return;
+      }
+
+      const rect = stage.container().getBoundingClientRect();
+      const end = toScene({
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+      });
+
+      const width = end.x - start.x;
+      const height = end.y - start.y;
+
+      // 过小的误触直接忽略，避免产生碎片分镜
+      if (Math.abs(width) < 8 || Math.abs(height) < 8) {
+        return;
+      }
+
+      createPanelFromRect(start.x, start.y, width, height);
+    };
+
+    window.addEventListener("mouseup", onWindowMouseUp);
+    return () => window.removeEventListener("mouseup", onWindowMouseUp);
+  }, [createPanelFromRect, manualPanelMode, zoom]);
 
   const adjustZoom = (delta: number) => {
     setZoom((current) => clampZoom(current + delta));
@@ -832,10 +912,40 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
         </div>
       </div>
 
+      {pickingMode && (
+        <div className="shrink-0 border-b border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1.5">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-primary)]">
+            <span className="studio-chip px-2 py-0.5 font-semibold">
+              {manualPanelMode ? "矩形扣选中" : "多边形扣选中"}
+            </span>
+            <span className="text-[var(--text-secondary)]">
+              {manualPanelMode
+                ? "画布已锁定，拖拽即可取景；已有分镜与气泡不会被拖动"
+                : "画布已锁定，单击加点，回到起点或按 Enter 闭合；已有分镜与气泡不会被拖动"}
+            </span>
+            <button
+              type="button"
+              className="studio-btn ml-auto h-6 px-2 text-[11px]"
+              onClick={() => {
+                if (manualPanelMode) {
+                  toggleManualPanelMode(false);
+                } else {
+                  togglePolygonTool(false);
+                }
+              }}
+            >
+              退出扣选
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="min-h-0 overflow-auto">
         <div className="studio-workspace min-w-fit p-6 lg:p-8">
           <div
-            className="relative overflow-hidden rounded-xl border border-slate-300/90 bg-slate-100 shadow-[0_28px_70px_rgba(2,6,23,0.4)]"
+            className={`relative overflow-hidden rounded-xl border bg-slate-100 shadow-[0_28px_70px_rgba(2,6,23,0.4)] ${
+              pickingMode ? "cursor-crosshair border-[var(--accent)]" : "border-slate-300/90"
+            }`}
             style={{
               width: Math.ceil(activePage.canvas.width * zoom),
               height: Math.ceil(activePage.canvas.height * zoom)
@@ -869,7 +979,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
               scaleY={zoom}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
               className="bg-slate-200"
             >
               <Layer>
@@ -908,7 +1017,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                       offsetX={transform.offsetX}
                       offsetY={transform.offsetY}
                       rotation={transform.rotation}
-                      draggable
+                      listening={!pickingMode}
+                      draggable={!pickingMode}
                       onClick={(event) => {
                         event.cancelBubble = true;
                         selectPanel(panel.id);
@@ -982,7 +1092,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                     width={bubble.width}
                     height={bubble.height}
                     opacity={resolveBubbleOpacity(bubble)}
-                    draggable
+                    listening={!pickingMode}
+                    draggable={!pickingMode}
                     onClick={(event) => {
                       event.cancelBubble = true;
                       selectBubble(bubble.id);
@@ -1067,10 +1178,10 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
               <Transformer
                 ref={transformerRef}
                 name="selection-transformer"
-                rotateEnabled={!isExporting && selection?.kind === "panel"}
-                resizeEnabled={!isExporting && selection?.kind === "bubble"}
+                rotateEnabled={!isExporting && !pickingMode && selection?.kind === "panel"}
+                resizeEnabled={!isExporting && !pickingMode && selection?.kind === "bubble"}
                 flipEnabled={false}
-                enabledAnchors={!isExporting && selection?.kind === "bubble" ? BUBBLE_TRANSFORMER_ANCHORS : []}
+                enabledAnchors={!isExporting && !pickingMode && selection?.kind === "bubble" ? BUBBLE_TRANSFORMER_ANCHORS : []}
                 anchorSize={TRANSFORMER_ANCHOR_SIZE}
                 keepRatio={false}
                 anchorStyleFunc={styleTransformerAnchor}
