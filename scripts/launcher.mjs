@@ -10,10 +10,10 @@ if (process.platform === "win32") {
 
 process.title = "漫画对话工坊";
 
-function run(command, args) {
-  // Windows 上 npm 是可执行脚本，直接指定 .cmd 调用，避免 shell 拼接带来的弃用警告
-  const executable = process.platform === "win32" ? command + ".cmd" : command;
-  const result = spawnSync(executable, args, { stdio: "inherit" });
+// 命令为固定字符串，不接受外部输入。
+// Windows 上 npm 是 .cmd，必须经由 shell 调用；不传 args 数组可避免 DEP0190 告警。
+function run(commandLine) {
+  const result = spawnSync(commandLine, { stdio: "inherit", shell: true });
   return result.status === 0;
 }
 
@@ -25,7 +25,7 @@ console.log("");
 
 if (!existsSync("node_modules")) {
   console.log("  [1/3] 首次运行，正在安装依赖，请稍候...");
-  if (!run("npm", ["install", "--no-audit", "--no-fund"])) {
+  if (!run("npm install --no-audit --no-fund")) {
     console.error("");
     console.error("  [错误] 依赖安装失败，请检查网络连接后重试");
     process.exit(1);
@@ -36,7 +36,7 @@ if (!existsSync("node_modules")) {
 
 if (needsBuild()) {
   console.log("  [2/3] 检测到源码更新，正在构建界面...");
-  if (!run("npm", ["run", "build"])) {
+  if (!run("npm run build")) {
     console.error("");
     console.error("  [错误] 构建失败");
     process.exit(1);
