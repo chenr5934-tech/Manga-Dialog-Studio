@@ -1,0 +1,1174 @@
+import { CSSProperties, ChangeEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { normalizeHexColor } from "../lib/colors";
+import { Bubble, BubbleDirection, BubbleType, CropConfig, Panel, PanelShape } from "../types";
+import { shouldPreserveImageTransparency } from "../lib/imageFormat";
+import {
+  getPanelImageClipBounds,
+  getPanelImageClipPoints,
+  normalizePanelRotation,
+  normalizePanelShape,
+  Point,
+  PANEL_SHAPE_MAX_RATIO,
+  PANEL_SHAPE_MIN_RATIO,
+  RECT_PANEL_SHAPE
+} from "../lib/panelGeometry";
+import {
+  clampNumber,
+  createCenteredVisibleCropWithRatio,
+  createStoredCropDraft,
+  CropDraft,
+  expandCropAroundCenter,
+  getVisibleCropFromStoredCrop,
+  moveVisibleCropWithinBounds,
+  ResizeEdge,
+  resizeVisibleCropFromEdgeWithRatio
+} from "../lib/cropGeometry";
+import { getActivePage, useEditorStore } from "../lib/store";
+import { resolveBubbleOpacity } from "./BubbleVisual";
+
+const containerClass =
+  "studio-surface h-full overflow-auto p-4 text-[var(--text-primary)]";
+const sectionClass = "studio-subtle space-y-3 rounded-2xl p-3.5";
+const fieldClass = "flex items-center justify-between gap-3";
+const labelClass = "text-[11px] uppercase tracking-[0.15em] text-[var(--text-secondary)]";
+const inputClass = "studio-input h-9 w-full px-3 text-sm";
+const selectClass = "studio-select h-9 w-full px-3 text-sm";
+const textareaClass = "studio-textarea w-full px-3 py-2 text-sm";
+const buttonClass = "studio-btn px-3 py-1.5 text-sm";
+const primaryButtonClass = `${buttonClass} studio-btn-primary`;
+const dangerButtonClass = `${buttonClass} studio-btn-danger`;
+const colorInputClass = "h-9 w-20 cursor-pointer rounded-lg border border-[var(--line-soft)] bg-transparent";
+const colorSwatchClass =
+  "flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--line-soft)] shadow-[0_8px_18px_rgba(2,6,23,0.14)] transition hover:-translate-y-0.5";
+const cropOverlaySvgClass = "absolute inset-0 block h-full w-full overflow-visible";
+const cropHandleClass =
+  "absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-100 bg-cyan-400 shadow-[0_0_0_1px_rgba(34,211,238,0.35)]";
+const TRANSPARENT_BUBBLE_BACKGROUND = "rgba(255,255,255,0)";
+const WHITE_BUBBLE_BACKGROUND = "#ffffff";
+const TRANSPARENCY_GRID_STYLE = {
+  backgroundColor: "#ffffff",
+  backgroundImage:
+    "linear-gradient(45deg, rgba(148,163,184,0.18) 25%, transparent 25%), linear-gradient(-45deg, rgba(148,163,184,0.18) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(148,163,184,0.18) 75%), linear-gradient(-45deg, transparent 75%, rgba(148,163,184,0.18) 75%)",
+  backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0",
+  backgroundSize: "20px 20px"
+} satisfies CSSProperties;
+
+type CropDragState =
+  | {
+      kind: "move";
+      pointerId: number;
+      startPoint: Point;
+      startCrop: CropDraft;
+    }
+  | {
+      kind: "resize";
+      pointerId: number;
+      edge: ResizeEdge;
+      startCrop: CropDraft;
+    };
+
+type CropShapePreview = {
+  clipBounds: ReturnType<typeof getPanelImageClipBounds>;
+  normalizedPoints: Point[];
+  svgPoints: string;
+};
+
+type CropEdge = {
+  edge: ResizeEdge;
+  start: Point;
+  end: Point;
+  mid: Point;
+};
+
+type CropOverlayStyle = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+// 边名按顺序循环使用；顶点数由实际形状决定，多边形分镜按 N 边闭环
+const CROP_EDGE_ORDER: ResizeEdge[] = ["top", "right", "bottom", "left"];
+
+function toNaturalPoint(
+  event: PointerEvent<Element>,
+  overlayElement: HTMLDivElement | null,
+  scale: number,
+  naturalWidth: number,
+  naturalHeight: number
+): Point {
+  if (!overlayElement) {
+    return {
+      x: 0,
+      y: 0
+    };
+  }
+
+  const rect = overlayElement.getBoundingClientRect();
+  return {
+    x: clampNumber((event.clientX - rect.left) / scale, 0, naturalWidth),
+    y: clampNumber((event.clientY - rect.top) / scale, 0, naturalHeight)
+  };
+}
+
+function isMainPointer(event: PointerEvent<Element>) {
+  if (event.pointerType === "touch") {
+    return true;
+  }
+  return event.button === 0;
+}
+
+function beginPointerCapture(overlay: HTMLDivElement | null, pointerId: number) {
+  if (!overlay || overlay.hasPointerCapture(pointerId)) {
+    return;
+  }
+  overlay.setPointerCapture(pointerId);
+}
+
+function endPointerCapture(overlay: HTMLDivElement | null, pointerId: number) {
+  if (!overlay || !overlay.hasPointerCapture(pointerId)) {
+    return;
+  }
+  overlay.releasePointerCapture(pointerId);
+}
+
+function getHandleCursor(edge: ResizeEdge) {
+  if (edge === "left" || edge === "right") {
+    return "ew-resize";
+  }
+  return "ns-resize";
+}
+
+function updateDraftForDragState(
+  dragState: CropDragState,
+  point: Point,
+  naturalWidth: number,
+  naturalHeight: number,
+  frameRatio: number,
+  zoom: number
+): CropDraft {
+  if (dragState.kind === "move") {
+    const deltaX = point.x - dragState.startPoint.x;
+    const deltaY = point.y - dragState.startPoint.y;
+    return moveVisibleCropWithinBounds(dragState.startCrop, deltaX, deltaY, naturalWidth, naturalHeight, frameRatio, zoom);
+  }
+
+  return resizeVisibleCropFromEdgeWithRatio(dragState.startCrop, dragState.edge, point, naturalWidth, naturalHeight, frameRatio, zoom);
+}
+
+function createScaledStyle(draft: CropDraft, scale: number) {
+  return {
+    left: draft.x * scale,
+    top: draft.y * scale,
+    width: Math.max(1, draft.width * scale),
+    height: Math.max(1, draft.height * scale)
+  };
+}
+
+function getEdgeMidpoint(start: Point, end: Point): Point {
+  return {
+    x: (start.x + end.x) / 2,
+    y: (start.y + end.y) / 2
+  };
+}
+
+function buildCropEdges(normalizedPoints: Point[]): CropEdge[] {
+  if (normalizedPoints.length < 2) {
+    return [];
+  }
+
+  return normalizedPoints.map((_, index) => {
+    const start = normalizedPoints[index];
+    const end = normalizedPoints[(index + 1) % normalizedPoints.length];
+
+    return {
+      edge: CROP_EDGE_ORDER[index % CROP_EDGE_ORDER.length],
+      start,
+      end,
+      mid: getEdgeMidpoint(start, end)
+    };
+  });
+}
+
+function getCropDisplaySize(naturalWidth: number, naturalHeight: number) {
+  const scale = Math.min(1, 920 / naturalWidth, 560 / naturalHeight);
+
+  return {
+    scale,
+    displayWidth: Math.max(1, Math.round(naturalWidth * scale)),
+    displayHeight: Math.max(1, Math.round(naturalHeight * scale))
+  };
+}
+
+function formatCropDraft(label: string, crop: CropDraft): string {
+  return `${label}: X ${Math.round(crop.x)} Y ${Math.round(crop.y)} W ${Math.round(crop.width)} H ${Math.round(crop.height)}`;
+}
+
+function getCropShapePreview(panel: Pick<Panel, "width" | "height" | "shape" | "gap">): CropShapePreview {
+  const clipPoints = getPanelImageClipPoints(panel);
+  const clipBounds = getPanelImageClipBounds(panel);
+  const normalizedPoints = clipPoints.map((point) => ({
+    x: (point.x - clipBounds.minX) / Math.max(1, clipBounds.width),
+    y: (point.y - clipBounds.minY) / Math.max(1, clipBounds.height)
+  }));
+
+  return {
+    clipBounds,
+    normalizedPoints,
+    svgPoints: normalizedPoints.map((point) => `${point.x * 100},${point.y * 100}`).join(" ")
+  };
+}
+
+function CropPreviewFrame({ style, svgPoints }: { style: CropOverlayStyle; svgPoints: string }) {
+  return (
+    <div className="pointer-events-none absolute" style={style}>
+      <svg className={cropOverlaySvgClass} viewBox="0 0 100 100" preserveAspectRatio="none">
+        <polygon
+          points={svgPoints}
+          fill="rgba(34, 211, 238, 0.08)"
+          stroke="rgb(165 243 252)"
+          strokeWidth="1.5"
+          strokeDasharray="5 4"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+    </div>
+  );
+}
+
+function EditableCropFrame({
+  style,
+  svgPoints,
+  cropEdges,
+  onMoveStart,
+  onResizeStart
+}: {
+  style: CropOverlayStyle;
+  svgPoints: string;
+  cropEdges: CropEdge[];
+  onMoveStart: (event: PointerEvent<Element>) => void;
+  onResizeStart: (edge: ResizeEdge) => (event: PointerEvent<Element>) => void;
+}) {
+  return (
+    <div className="absolute" style={style}>
+      <svg className={cropOverlaySvgClass} viewBox="0 0 100 100" preserveAspectRatio="none">
+        <polygon
+          points={svgPoints}
+          fill="rgba(34, 211, 238, 0.10)"
+          className="cursor-move"
+          onPointerDown={onMoveStart}
+        />
+        <polygon
+          points={svgPoints}
+          fill="none"
+          stroke="rgb(103 232 249)"
+          strokeWidth="1.8"
+          vectorEffect="non-scaling-stroke"
+        />
+        {cropEdges.map(({ edge, start, end }) => (
+          <line
+            key={edge}
+            x1={start.x * 100}
+            y1={start.y * 100}
+            x2={end.x * 100}
+            y2={end.y * 100}
+            stroke="transparent"
+            strokeWidth="14"
+            vectorEffect="non-scaling-stroke"
+            style={{ cursor: getHandleCursor(edge) }}
+            onPointerDown={onResizeStart(edge)}
+          />
+        ))}
+      </svg>
+      {cropEdges.map(({ edge, mid }) => (
+        <div
+          key={`${edge}-handle`}
+          className={cropHandleClass}
+          style={{
+            left: `${mid.x * 100}%`,
+            top: `${mid.y * 100}%`,
+            cursor: getHandleCursor(edge)
+          }}
+          onPointerDown={onResizeStart(edge)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  step = 1
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+}) {
+  return (
+    <label className={fieldClass}>
+      <span className={labelClass}>{label}</span>
+      <input
+        className={`${inputClass} max-w-36`}
+        type="number"
+        value={Number.isFinite(value) ? value : 0}
+        min={min}
+        max={max}
+        step={step}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+    </label>
+  );
+}
+
+function ShapePercentField({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <NumberField
+      label={label}
+      value={Math.round(value * 100)}
+      min={Math.round(PANEL_SHAPE_MIN_RATIO * 100)}
+      max={Math.round(PANEL_SHAPE_MAX_RATIO * 100)}
+      step={1}
+      onChange={(nextValue) => onChange(nextValue / 100)}
+    />
+  );
+}
+
+type PanelShapePreset = {
+  label: string;
+  shape: PanelShape;
+};
+
+const PANEL_SHAPE_PRESETS: PanelShapePreset[] = [
+  {
+    label: "重置",
+    shape: RECT_PANEL_SHAPE
+  },
+  {
+    label: "平行 /",
+    shape: {
+      topLeft: 0.16,
+      topRight: 1,
+      bottomRight: 0.84,
+      bottomLeft: 0
+    }
+  },
+  {
+    label: "平行 \\",
+    shape: {
+      topLeft: 0,
+      topRight: 0.84,
+      bottomRight: 1,
+      bottomLeft: 0.16
+    }
+  },
+  {
+    label: "上窄",
+    shape: {
+      topLeft: 0.14,
+      topRight: 0.86,
+      bottomRight: 1,
+      bottomLeft: 0
+    }
+  },
+  {
+    label: "下窄",
+    shape: {
+      topLeft: 0,
+      topRight: 1,
+      bottomRight: 0.86,
+      bottomLeft: 0.14
+    }
+  }
+];
+
+function TextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="space-y-1">
+      <span className={labelClass}>{label}</span>
+      <input className={inputClass} value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
+function getToggleButtonClass(active: boolean) {
+  return `${buttonClass} ${active ? "studio-btn-primary" : ""}`;
+}
+
+function getColorSwatchButtonClass(active: boolean) {
+  return `${colorSwatchClass} ${active ? "border-cyan-300 shadow-[0_0_0_2px_rgba(34,211,238,0.3)]" : ""}`;
+}
+
+function isTransparentBubbleBackground(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return normalized === "transparent" || normalized === TRANSPARENT_BUBBLE_BACKGROUND;
+}
+
+function isWhiteBubbleBackground(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return normalized === "#ffffff" || normalized === "#fff" || normalized === "white" || normalized === "rgb(255,255,255)";
+}
+
+function VisualCropModal({ panel, open, onClose }: { panel: Panel; open: boolean; onClose: () => void }) {
+  const setPanelCrop = useEditorStore((state) => state.setPanelCrop);
+  const resetPanelCrop = useEditorStore((state) => state.resetPanelCrop);
+
+  const naturalWidth = panel.image?.naturalWidth ?? panel.width;
+  const naturalHeight = panel.image?.naturalHeight ?? panel.height;
+  const cropZoom = clampNumber(panel.image?.crop?.scale ?? 1, 0.1, 4);
+  const visibleCropZoom = Math.max(1, cropZoom);
+  const cropShapePreview = useMemo(() => getCropShapePreview(panel), [panel.gap, panel.height, panel.shape, panel.width]);
+  const frameRatio = cropShapePreview.clipBounds.width / cropShapePreview.clipBounds.height;
+  const frameRatioText = `${Math.round(cropShapePreview.clipBounds.width)}:${Math.round(cropShapePreview.clipBounds.height)}`;
+  const storedCrop = useMemo(
+    () => createStoredCropDraft(panel.image?.crop, naturalWidth, naturalHeight),
+    [naturalHeight, naturalWidth, panel.image?.crop]
+  );
+  const initialCrop: CropDraft = useMemo(
+    () =>
+      getVisibleCropFromStoredCrop(
+        storedCrop,
+        cropShapePreview.clipBounds.width,
+        cropShapePreview.clipBounds.height,
+        visibleCropZoom
+      ),
+    [cropShapePreview.clipBounds.height, cropShapePreview.clipBounds.width, storedCrop, visibleCropZoom]
+  );
+  const maxVisibleCrop = useMemo(
+    () => createCenteredVisibleCropWithRatio(naturalWidth, naturalHeight, frameRatio, visibleCropZoom),
+    [frameRatio, naturalHeight, naturalWidth, visibleCropZoom]
+  );
+  const cropEdges = useMemo(() => buildCropEdges(cropShapePreview.normalizedPoints), [cropShapePreview.normalizedPoints]);
+  const imagePreservesTransparency = shouldPreserveImageTransparency(panel.image);
+
+  const [draft, setDraft] = useState<CropDraft>(initialCrop);
+  const [dragState, setDragState] = useState<CropDragState | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    setDraft(initialCrop);
+    setDragState(null);
+  }, [initialCrop, open]);
+
+  if (!open || !panel.image?.original) {
+    return null;
+  }
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const { scale, displayWidth, displayHeight } = getCropDisplaySize(naturalWidth, naturalHeight);
+  const draftStyle = createScaledStyle(draft, scale);
+  // When the panel is zoomed in, we visualize the larger stored crop that preserves the visible frame.
+  const storedPreview = Math.abs(visibleCropZoom - 1) > 0.001 ? expandCropAroundCenter(draft, visibleCropZoom) : null;
+  const storedPreviewStyle = storedPreview ? createScaledStyle(storedPreview, scale) : null;
+
+  const toPoint = (event: PointerEvent<Element>) =>
+    toNaturalPoint(event, overlayRef.current, scale, naturalWidth, naturalHeight);
+  const resolveDraft = (activeDragState: CropDragState, point: Point) =>
+    updateDraftForDragState(activeDragState, point, naturalWidth, naturalHeight, frameRatio, visibleCropZoom);
+  const updateDraftFromPoint = (activeDragState: CropDragState, point: Point) => setDraft(resolveDraft(activeDragState, point));
+
+  const startMove = (event: PointerEvent<Element>) => {
+    if (!isMainPointer(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    const point = toPoint(event);
+    setDragState({
+      kind: "move",
+      pointerId: event.pointerId,
+      startPoint: point,
+      startCrop: draft
+    });
+    beginPointerCapture(overlayRef.current, event.pointerId);
+  };
+
+  const startResize = (edge: ResizeEdge) => (event: PointerEvent<Element>) => {
+    if (!isMainPointer(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const point = toPoint(event);
+    const nextDragState: CropDragState = {
+      kind: "resize",
+      pointerId: event.pointerId,
+      edge,
+      startCrop: draft
+    };
+    updateDraftFromPoint(nextDragState, point);
+    setDragState(nextDragState);
+    beginPointerCapture(overlayRef.current, event.pointerId);
+  };
+
+  const onOverlayPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    const point = toPoint(event);
+    updateDraftFromPoint(dragState, point);
+  };
+
+  const stopDrag = (pointerId: number) => {
+    endPointerCapture(overlayRef.current, pointerId);
+    setDragState((current) => {
+      if (!current || current.pointerId !== pointerId) {
+        return current;
+      }
+      return null;
+    });
+  };
+
+  const onOverlayPointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    const point = toPoint(event);
+    updateDraftFromPoint(dragState, point);
+    stopDrag(event.pointerId);
+  };
+
+  const onOverlayPointerCancel = (event: PointerEvent<HTMLDivElement>) => {
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+    stopDrag(event.pointerId);
+  };
+
+  const applyCrop = () => {
+    const storedDraft = expandCropAroundCenter(draft, visibleCropZoom);
+    setPanelCrop(panel.id, {
+      x: storedDraft.x,
+      y: storedDraft.y,
+      width: storedDraft.width,
+      height: storedDraft.height,
+      scale: cropZoom
+    });
+    onClose();
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(2,8,14,0.82)] p-4 backdrop-blur-sm">
+      <div
+        className="absolute inset-0"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div className="studio-surface relative w-full max-w-6xl p-4 md:p-5" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">Crop Editor</p>
+            <h4 className="text-base font-semibold text-[var(--text-primary)]">图像手动裁剪</h4>
+          </div>
+          <button className={buttonClass} onClick={onClose}>
+            关闭
+          </button>
+        </div>
+
+        <p className="mt-2 text-xs text-[var(--text-secondary)]">
+          蓝色主梯形表示分镜里真正能看到的图像区域；拖动内部可移动，拖动四条边上的控制点可缩放。形状会跟随当前分镜梯形，实际可见区域的比例固定为 {frameRatioText}。
+        </p>
+        {storedPreviewStyle ? (
+          <p className="mt-1 text-xs text-[var(--text-secondary)]">当前图片缩放为 {cropZoom.toFixed(2)}x，外层虚线梯形表示为保留这块可见区域而实际保存的 crop 缓冲范围。</p>
+        ) : null}
+
+        <div
+          className="relative mx-auto mt-4 overflow-hidden rounded-xl border border-[var(--line-soft)] bg-slate-950 shadow-[0_16px_46px_rgba(2,6,23,0.55)]"
+          style={{
+            width: displayWidth,
+            height: displayHeight,
+            ...(imagePreservesTransparency ? TRANSPARENCY_GRID_STYLE : {})
+          }}
+        >
+          <img
+            src={panel.image.original}
+            alt="crop-source"
+            className="block select-none"
+            draggable={false}
+            style={{ width: displayWidth, height: displayHeight }}
+          />
+
+          <div
+            ref={overlayRef}
+            className="absolute inset-0 touch-none"
+            onPointerMove={onOverlayPointerMove}
+            onPointerUp={onOverlayPointerUp}
+            onPointerCancel={onOverlayPointerCancel}
+          >
+            {storedPreviewStyle ? <CropPreviewFrame style={storedPreviewStyle} svgPoints={cropShapePreview.svgPoints} /> : null}
+            <EditableCropFrame
+              style={draftStyle}
+              svgPoints={cropShapePreview.svgPoints}
+              cropEdges={cropEdges}
+              onMoveStart={startMove}
+              onResizeStart={startResize}
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-[var(--text-primary)]">
+          <span>{formatCropDraft("可见", draft)}</span>
+          {storedPreview ? (
+            <>
+              <span className="text-[var(--text-secondary)]">|</span>
+              <span>{formatCropDraft("保存", storedPreview)}</span>
+            </>
+          ) : null}
+          <span className="text-[var(--text-secondary)]">|</span>
+          <span>
+            原图: {naturalWidth} x {naturalHeight}
+          </span>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button className={buttonClass} onClick={() => setDraft(initialCrop)}>
+            回到当前裁剪
+          </button>
+          <button
+            className={buttonClass}
+            onClick={() => setDraft(maxVisibleCrop)}
+          >
+            匹配比例最大区域
+          </button>
+          <button
+            className={dangerButtonClass}
+            onClick={() => {
+              resetPanelCrop(panel.id);
+              onClose();
+            }}
+          >
+            清除裁剪
+          </button>
+          <button className={primaryButtonClass} onClick={applyCrop}>
+            应用裁剪
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function CropEditor({ panel }: { panel: Panel }) {
+  const setPanelCrop = useEditorStore((state) => state.setPanelCrop);
+  const resetPanelCrop = useEditorStore((state) => state.resetPanelCrop);
+
+  if (!panel.image?.original) {
+    return null;
+  }
+
+  const naturalWidth = panel.image.naturalWidth ?? panel.width;
+  const naturalHeight = panel.image.naturalHeight ?? panel.height;
+  const crop: CropConfig = panel.image.crop ?? {
+    x: 0,
+    y: 0,
+    width: naturalWidth,
+    height: naturalHeight,
+    scale: 1
+  };
+
+  const update = (patch: Partial<CropConfig>) => {
+    setPanelCrop(panel.id, {
+      ...crop,
+      ...patch
+    });
+  };
+
+  return (
+    <div className={sectionClass}>
+      <h4 className="text-sm font-semibold text-[var(--text-primary)]">精细裁剪参数（非破坏）</h4>
+      <p className="text-xs text-[var(--text-secondary)]">
+        原图尺寸: {naturalWidth} x {naturalHeight}
+      </p>
+
+      <NumberField label="Crop X" value={crop.x} min={0} onChange={(value) => update({ x: value })} />
+      <NumberField label="Crop Y" value={crop.y} min={0} onChange={(value) => update({ y: value })} />
+      <NumberField
+        label="Crop Width"
+        value={crop.width}
+        min={1}
+        max={naturalWidth}
+        onChange={(value) => update({ width: value })}
+      />
+      <NumberField
+        label="Crop Height"
+        value={crop.height}
+        min={1}
+        max={naturalHeight}
+        onChange={(value) => update({ height: value })}
+      />
+      <NumberField label="Scale" value={crop.scale} min={0.1} max={4} step={0.05} onChange={(value) => update({ scale: value })} />
+
+      <button className={buttonClass} onClick={() => resetPanelCrop(panel.id)}>
+        重置裁剪
+      </button>
+    </div>
+  );
+}
+
+function PanelInspector({ panel }: { panel: Panel }) {
+  const updatePanel = useEditorStore((state) => state.updatePanel);
+  const uploadLocalImageForPanel = useEditorStore((state) => state.uploadLocalImageForPanel);
+  const uploadingPanelId = useEditorStore((state) => state.busy.uploadingPanelId);
+
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const localImageInputRef = useRef<HTMLInputElement | null>(null);
+  const panelRotation = normalizePanelRotation(panel.rotation);
+  const panelShape = normalizePanelShape(panel.shape, panel.width);
+  const isUploading = uploadingPanelId === panel.id;
+  const isImageBusy = isUploading;
+  const imagePreservesTransparency = shouldPreserveImageTransparency(panel.image);
+
+  useEffect(() => {
+    setCropModalOpen(false);
+  }, [panel.id]);
+
+  const patch = (key: keyof Panel) => (value: string | number) => {
+    updatePanel(panel.id, {
+      [key]: value
+    } as Partial<Panel>);
+  };
+
+  const onLocalImageSelected = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    void uploadLocalImageForPanel(panel.id, file);
+    event.target.value = "";
+  };
+
+  const adjustRotation = (delta: number) => {
+    updatePanel(panel.id, {
+      rotation: normalizePanelRotation(panelRotation + delta)
+    });
+  };
+
+  const updateShape = (patchShape: Partial<PanelShape>) => {
+    updatePanel(panel.id, {
+      shape: normalizePanelShape(
+        {
+          ...panelShape,
+          ...patchShape
+        },
+        panel.width
+      )
+    });
+  };
+
+  const applyShapePreset = (shape: PanelShape) => {
+    updatePanel(panel.id, {
+      shape: normalizePanelShape(shape, panel.width)
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className={sectionClass}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">分镜属性</h3>
+          <span className="studio-chip px-2.5 py-1 text-[11px]">Panel</span>
+        </div>
+        <NumberField label="X" value={panel.x} onChange={patch("x") as (v: number) => void} />
+        <NumberField label="Y" value={panel.y} onChange={patch("y") as (v: number) => void} />
+        <NumberField label="Width" value={panel.width} min={24} onChange={patch("width") as (v: number) => void} />
+        <NumberField label="Height" value={panel.height} min={24} onChange={patch("height") as (v: number) => void} />
+        <NumberField
+          label="Tilt"
+          value={panelRotation}
+          min={-180}
+          max={180}
+          onChange={(value) => patch("rotation")(normalizePanelRotation(value))}
+        />
+        <NumberField label="BorderWidth" value={panel.borderWidth} min={0} onChange={patch("borderWidth") as (v: number) => void} />
+        <NumberField label="Radius" value={panel.borderRadius} min={0} onChange={patch("borderRadius") as (v: number) => void} />
+        <NumberField label="Gap" value={panel.gap} min={0} onChange={patch("gap") as (v: number) => void} />
+
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <button className={buttonClass} onClick={() => adjustRotation(-10)}>
+              -10°
+            </button>
+            <button className={buttonClass} onClick={() => adjustRotation(-5)}>
+              -5°
+            </button>
+            <button
+              className={buttonClass}
+              onClick={() => {
+                updatePanel(panel.id, {
+                  rotation: 0
+                });
+              }}
+            >
+              归零
+            </button>
+            <button className={buttonClass} onClick={() => adjustRotation(5)}>
+              +5°
+            </button>
+            <button className={buttonClass} onClick={() => adjustRotation(10)}>
+              +10°
+            </button>
+          </div>
+          <p className="text-xs text-[var(--text-secondary)]">画布上也可以直接拖动蓝色旋转手柄，角度会按 5° 吸附。</p>
+        </div>
+
+        <label className={fieldClass}>
+          <span className={labelClass}>BorderColor</span>
+          <input
+            className={colorInputClass}
+            type="color"
+            value={panel.borderColor}
+            onChange={(event) => patch("borderColor")(event.target.value)}
+          />
+        </label>
+      </div>
+
+      {panel.points ? (
+        <div className={sectionClass}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">多边形分镜</h3>
+            <span className="studio-chip px-2.5 py-1 text-[11px]">Polygon</span>
+          </div>
+
+          <p className="text-xs text-[var(--text-secondary)]">
+            该分镜由 {panel.points.length} 个顶点扣选而成，可整体拖动、缩放和旋转。
+          </p>
+          <button className={buttonClass} onClick={() => updatePanel(panel.id, { points: undefined })}>
+            转为矩形分镜
+          </button>
+        </div>
+      ) : (
+      <div className={sectionClass}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">斜切</h3>
+          <span className="studio-chip px-2.5 py-1 text-[11px]">Skew</span>
+        </div>
+
+        <p className="text-xs text-[var(--text-secondary)]">
+          最推荐的编辑方式是直接在画布拖动四个蓝色角点；这里更适合精修百分比或一键套用常见构图。
+        </p>
+        <p className="text-xs text-[var(--text-secondary)]">支持负值和超过 100% 的数值，这样就能把边角向外扩出去。</p>
+
+        <ShapePercentField label="Top Left" value={panelShape.topLeft} onChange={(value) => updateShape({ topLeft: value })} />
+        <ShapePercentField label="Top Right" value={panelShape.topRight} onChange={(value) => updateShape({ topRight: value })} />
+        <ShapePercentField
+          label="Bottom Right"
+          value={panelShape.bottomRight}
+          onChange={(value) => updateShape({ bottomRight: value })}
+        />
+        <ShapePercentField
+          label="Bottom Left"
+          value={panelShape.bottomLeft}
+          onChange={(value) => updateShape({ bottomLeft: value })}
+        />
+
+        <div className="flex flex-wrap gap-2">
+          {PANEL_SHAPE_PRESETS.map((preset) => (
+            <button key={preset.label} className={buttonClass} onClick={() => applyShapePreset(preset.shape)}>
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      )}
+
+      <div className={sectionClass}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">图像来源</h3>
+          <span className="studio-chip px-2.5 py-1 text-[11px]">Image</span>
+        </div>
+
+        <input
+          ref={localImageInputRef}
+          className="hidden"
+          type="file"
+          accept="image/*"
+          onChange={onLocalImageSelected}
+        />
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            className={primaryButtonClass}
+            disabled={isImageBusy}
+            onClick={() => localImageInputRef.current?.click()}
+          >
+            {isUploading ? "导入中..." : "导入本地图片"}
+          </button>
+
+          {panel.image?.original ? (
+            <button className={buttonClass} disabled={isImageBusy} onClick={() => setCropModalOpen(true)}>
+              打开手动裁剪
+            </button>
+          ) : null}
+        </div>
+
+        {panel.image?.original ? (
+          <div className="space-y-1">
+            <p className="text-xs text-[var(--text-secondary)]">
+              当前图像尺寸: {panel.image.naturalWidth ?? "?"} x {panel.image.naturalHeight ?? "?"}
+            </p>
+            {imagePreservesTransparency ? (
+              <p className="text-xs text-[var(--text-secondary)]">已保留透明通道；PNG / WebP / GIF / SVG / AVIF 的半透明像素会按原样显示。</p>
+            ) : null}
+            <p className="text-xs text-[var(--text-secondary)]">OpenKoma 现在是纯本地编辑器，这里只支持导入本地图片并进行非破坏裁剪。</p>
+          </div>
+        ) : (
+          <p className="text-xs text-[var(--text-secondary)]">请先导入一张本地图片，再使用手动裁剪把画面贴合当前分镜。</p>
+        )}
+      </div>
+
+      <CropEditor panel={panel} />
+
+      <VisualCropModal panel={panel} open={cropModalOpen} onClose={() => setCropModalOpen(false)} />
+    </div>
+  );
+}
+
+function BubbleInspector({ bubble }: { bubble: Bubble }) {
+  const updateBubble = useEditorStore((state) => state.updateBubble);
+  const recentTextColors = useEditorStore((state) => state.recentTextColors);
+  const currentTextColor = normalizeHexColor(bubble.textColor);
+  const currentOpacity = resolveBubbleOpacity(bubble);
+
+  const patch = (next: Partial<Bubble>) => {
+    updateBubble(bubble.id, next);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className={sectionClass}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">文字属性</h3>
+          <span className="studio-chip px-2.5 py-1 text-[11px]">Text</span>
+        </div>
+        <p className="text-xs leading-5 text-[var(--text-secondary)]">点击画布上的文字框后，可以在这里切换形状、背景、边框和排版方向。</p>
+      </div>
+
+      <div className={sectionClass}>
+        <label className="space-y-1">
+          <span className={labelClass}>内容</span>
+          <textarea
+            rows={6}
+            className={textareaClass}
+            value={bubble.text}
+            onChange={(event: ChangeEvent<HTMLTextAreaElement>) => patch({ text: event.target.value })}
+          />
+        </label>
+      </div>
+
+      <div className={sectionClass}>
+        <div className="space-y-1">
+          <span className={labelClass}>形状</span>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { value: "rect", label: "矩形" },
+              { value: "rounded", label: "圆角" },
+              { value: "circle", label: "圆形" }
+            ].map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={getToggleButtonClass(bubble.type === option.value)}
+                onClick={() => patch({ type: option.value as BubbleType })}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <span className={labelClass}>背景</span>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              className={getToggleButtonClass(isTransparentBubbleBackground(bubble.background))}
+              onClick={() => patch({ background: TRANSPARENT_BUBBLE_BACKGROUND })}
+            >
+              透明
+            </button>
+            <button
+              type="button"
+              className={getToggleButtonClass(isWhiteBubbleBackground(bubble.background))}
+              onClick={() => patch({ background: WHITE_BUBBLE_BACKGROUND })}
+            >
+              纯白
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <span className={labelClass}>排版方向</span>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { value: "horizontal", label: "横排" },
+              { value: "vertical", label: "竖排" }
+            ].map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={getToggleButtonClass(bubble.direction === option.value)}
+                onClick={() => patch({ direction: option.value as BubbleDirection })}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <NumberField label="字体大小" value={bubble.fontSize} min={8} onChange={(value) => patch({ fontSize: value })} />
+        <TextField label="字体" value={bubble.fontFamily} onChange={(value) => patch({ fontFamily: value })} />
+
+        <div className="space-y-2">
+          <label className={fieldClass}>
+            <span className={labelClass}>字体颜色</span>
+            <div className="flex items-center gap-2">
+              <input
+                className={colorInputClass}
+                type="color"
+                value={currentTextColor}
+                onChange={(event) => patch({ textColor: event.target.value })}
+              />
+              <span className="min-w-20 text-right text-xs font-medium tracking-[0.08em] text-[var(--text-secondary)]">
+                {currentTextColor.toUpperCase()}
+              </span>
+            </div>
+          </label>
+
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-3">
+              <span className={labelClass}>最近使用</span>
+              <span className="text-[11px] text-[var(--text-secondary)]">最多保留 5 种</span>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {recentTextColors.map((color, index) => {
+                const active = color === currentTextColor;
+                return (
+                  <button
+                    key={`${color}-${index}`}
+                    type="button"
+                    className={getColorSwatchButtonClass(active)}
+                    style={{ backgroundColor: color }}
+                    title={color.toUpperCase()}
+                    aria-label={`使用颜色 ${color.toUpperCase()}`}
+                    onClick={() => patch({ textColor: color })}
+                  >
+                    {active ? <span className="h-2.5 w-2.5 rounded-full bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.35)]" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className={sectionClass}>
+        <NumberField label="边框粗细" value={bubble.borderWidth} min={0} onChange={(value) => patch({ borderWidth: value })} />
+
+        <label className={fieldClass}>
+          <span className={labelClass}>边框颜色</span>
+          <input
+            className={colorInputClass}
+            type="color"
+            value={bubble.borderColor}
+            onChange={(event) => patch({ borderColor: event.target.value })}
+          />
+        </label>
+
+        <NumberField label="X" value={bubble.x} onChange={(value) => patch({ x: value })} />
+        <NumberField label="Y" value={bubble.y} onChange={(value) => patch({ y: value })} />
+        <NumberField label="宽度" value={bubble.width} min={30} onChange={(value) => patch({ width: value })} />
+        <NumberField label="高度" value={bubble.height} min={30} onChange={(value) => patch({ height: value })} />
+      </div>
+
+      <div className={sectionClass}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">不透明度</h3>
+          <span className="studio-chip px-2.5 py-1 text-[11px]">{Math.round(currentOpacity * 100)}%</span>
+        </div>
+
+        <input
+          data-bubble-opacity="1"
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={Math.round(currentOpacity * 100)}
+          onChange={(event) => patch({ opacity: Number(event.target.value) / 100 })}
+          className="w-full accent-[var(--accent)]"
+        />
+
+        <div className="flex flex-wrap gap-2">
+          {[100, 85, 70, 50, 30].map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              className={getToggleButtonClass(Math.round(currentOpacity * 100) === preset)}
+              onClick={() => patch({ opacity: preset / 100 })}
+            >
+              {preset}%
+            </button>
+          ))}
+        </div>
+
+        <p className="text-xs text-[var(--text-secondary)]">同时作用于对话框底图与文字，用来让气泡不完全挡住画面。</p>
+      </div>
+    </div>
+  );
+}
+
+export default function InspectorPanel() {
+  const activePage = useEditorStore((state) => getActivePage(state.project));
+  const selection = useEditorStore((state) => state.selection);
+
+  const selectedPanel =
+    selection?.kind === "panel" ? activePage.panels.find((panel) => panel.id === selection.id) : undefined;
+  const selectedBubble =
+    selection?.kind === "bubble" ? activePage.bubbles.find((bubble) => bubble.id === selection.id) : undefined;
+
+  return (
+    <aside className={containerClass}>
+      <div className="mb-4">
+        <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">Inspector</p>
+        <h2 className="text-lg font-semibold text-[var(--text-primary)]">属性检查器</h2>
+      </div>
+
+      {!selection && (
+        <p className="studio-subtle rounded-xl px-3 py-2 text-sm text-[var(--text-secondary)]">
+          请选择一个分镜或文字框进行编辑。
+        </p>
+      )}
+
+      {selectedPanel && <PanelInspector panel={selectedPanel} />}
+      {selectedBubble && <BubbleInspector bubble={selectedBubble} />}
+    </aside>
+  );
+}

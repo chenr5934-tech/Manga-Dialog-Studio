@@ -1,0 +1,13 @@
+# 仓库内统一以 LF 存储；批处理必须是 CRLF，否则 Windows cmd 解析会错乱
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
