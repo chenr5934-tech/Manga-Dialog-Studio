@@ -49,11 +49,7 @@ await sleep(700);
 // 造点内容：一个气泡（默认项目已带 1 页 1 分镜）
 const card = await page.$('[data-preset-id="builtin:speech-right"]');
 const box = await card.boundingBox();
-await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-await page.mouse.down({ clickCount: 1 });
-await page.mouse.up({ clickCount: 1 });
-await page.mouse.down({ clickCount: 2 });
-await page.mouse.up({ clickCount: 2 });
+await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 await sleep(900);
 
 // 打开模板小窗

@@ -51,28 +51,22 @@ async function clickByText(label) {
   return false;
 }
 
-// 真实双击序列：第二次按下带上 clickCount=2，Chrome 会合成 dblclick
-async function realDoubleClick(handle) {
+// 单击预设卡片即可把气泡加到画布中央
+async function clickPresetCard(handle) {
   const box = await handle.boundingBox();
-  const x = box.x + box.width / 2;
-  const y = box.y + box.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down({ clickCount: 1 });
-  await page.mouse.up({ clickCount: 1 });
-  await page.mouse.down({ clickCount: 2 });
-  await page.mouse.up({ clickCount: 2 });
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 }
 
 await shot("v2-01-initial");
 record("应用加载完成", (await stats()).panels >= 1, JSON.stringify(await stats()));
 
-// 1) 双击预设放置气泡
+// 1) 单击预设放置气泡
 const card = await page.$('[data-preset-id="builtin:speech-right"]');
-await realDoubleClick(card);
+await clickPresetCard(card);
 await sleep(900);
 let state = await stats();
-record("双击预设放置气泡", state.bubbles === 1, "气泡=" + state.bubbles);
-await shot("v2-02-bubble-double-click");
+record("单击预设放置气泡", state.bubbles === 1, "气泡=" + state.bubbles);
+await shot("v2-02-bubble-click");
 
 // 2) 拖拽预设到画布
 const dragOutcome = await page.evaluate(() => {
@@ -281,12 +275,7 @@ await sleep(400);
 
 // 在该页重新放一个白气泡到画布中心
 const bubbleCard = await page.$('[data-preset-id="builtin:speech-right"]');
-const bubbleCardBox = await bubbleCard.boundingBox();
-await page.mouse.move(bubbleCardBox.x + bubbleCardBox.width / 2, bubbleCardBox.y + bubbleCardBox.height / 2);
-await page.mouse.down({ clickCount: 1 });
-await page.mouse.up({ clickCount: 1 });
-await page.mouse.down({ clickCount: 2 });
-await page.mouse.up({ clickCount: 2 });
+await clickPresetCard(bubbleCard);
 await sleep(1000);
 
 const sampleBrightness = () =>

@@ -154,8 +154,8 @@ export default function BubblePresetPanel() {
         setDraggingId(preset.id);
       }}
       onDragEnd={() => setDraggingId(null)}
-      onDoubleClick={() => addToCanvasCenter(preset)}
-      title="拖到画布放置，双击加到画布中央"
+      onClick={() => addToCanvasCenter(preset)}
+      title="单击加到画布中央；也可以直接拖到画布上指定位置"
       className={`group flex cursor-grab items-center gap-2 rounded-lg border p-1.5 transition active:cursor-grabbing ${
         draggingId === preset.id
           ? "border-[var(--accent)] bg-[var(--accent-soft)] opacity-60"
@@ -219,6 +219,11 @@ export default function BubblePresetPanel() {
           编辑填字区
         </button>
       </div>
+
+      <p className="border-b border-[var(--line-soft)] px-3 py-1.5 text-[10px] leading-4 text-[var(--text-secondary)]">
+        <span className="text-[var(--text-primary)]">单击</span>加到画布中央，或
+        <span className="text-[var(--text-primary)]">拖到画布</span>指定位置
+      </p>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-2.5 py-2.5">
         {userPresets.length > 0 && (

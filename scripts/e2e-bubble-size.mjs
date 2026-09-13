@@ -60,14 +60,10 @@ await page.goto(APP_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
 await page.waitForSelector('[data-preset-id="builtin:speech-right"]', { timeout: 30000 });
 await sleep(600);
 
-// 双击预设放置气泡（会自动选中，属性面板随之出现）
+// 单击预设放置气泡（会自动选中，属性面板随之出现）
 const card = await page.$('[data-preset-id="builtin:speech-right"]');
 const box = await card.boundingBox();
-await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-await page.mouse.down({ clickCount: 1 });
-await page.mouse.up({ clickCount: 1 });
-await page.mouse.down({ clickCount: 2 });
-await page.mouse.up({ clickCount: 2 });
+await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 await sleep(900);
 
 const slider = await readSlider("宽度");
