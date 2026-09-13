@@ -167,6 +167,23 @@ export default function PresetLibraryModal() {
     }
   };
 
+  const downloadJson = () => {
+    if (userPresetCount === 0) {
+      setNotice("还没有自定义预设可下载");
+      return;
+    }
+    const blob = new Blob([exportBubblePresets()], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "dialog-presets.json";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    setNotice("已下载 " + userPresetCount + " 个预设");
+  };
+
   const revealFolder = async () => {
     try {
       await fetch("/api/presets/reveal", { method: "POST" });
@@ -188,6 +205,9 @@ export default function PresetLibraryModal() {
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">预设库文件夹</h3>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <button type="button" className="studio-btn h-7 px-3 text-xs" onClick={downloadJson} title="下载为 JSON，便于发给别人">
+              下载 JSON
+            </button>
             <button type="button" className="studio-btn h-7 px-3 text-xs" onClick={() => void revealFolder()}>
               打开文件夹
             </button>
@@ -250,26 +270,31 @@ export default function PresetLibraryModal() {
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--line-soft)] px-4 py-3">
-          <span className="text-[11px] text-[var(--text-secondary)]">
-            当前有 {userPresetCount} 个自定义预设
-          </span>
-          <input
-            className="studio-input h-8 min-w-[180px] flex-1 px-2 text-xs"
-            placeholder="文件名，例如：青春校园-对话框"
-            value={saveName}
-            data-preset-save-input="1"
-            onChange={(event) => setSaveName(event.target.value)}
-          />
-          <button
-            type="button"
-            data-preset-save-button="1"
-            className="studio-btn studio-btn-primary h-8 px-4 text-xs disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={userPresetCount === 0 || busyName !== null}
-            onClick={() => void saveToLibrary()}
-          >
-            保存到文件夹
-          </button>
+        <div className="border-t border-[var(--line-soft)] px-4 py-3">
+          <p className="mb-2 text-[11px] font-semibold text-[var(--text-primary)]">保存当前预设到文件夹</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] text-[var(--text-secondary)]">
+              {userPresetCount === 0
+                ? "还没有自定义预设，先用左侧「导入对话框图」或「编辑填字区」做一个"
+                : `会把这 ${userPresetCount} 个自定义预设写成一个文件`}
+            </span>
+            <input
+              className="studio-input h-8 min-w-[180px] flex-1 px-2 text-xs"
+              placeholder="文件名，例如：青春校园-对话框"
+              value={saveName}
+              data-preset-save-input="1"
+              onChange={(event) => setSaveName(event.target.value)}
+            />
+            <button
+              type="button"
+              data-preset-save-button="1"
+              className="studio-btn studio-btn-primary h-8 px-4 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={userPresetCount === 0 || busyName !== null}
+              onClick={() => void saveToLibrary()}
+            >
+              {userPresetCount === 0 ? "暂无可保存的预设" : "保存到文件夹"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

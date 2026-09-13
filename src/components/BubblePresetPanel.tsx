@@ -96,6 +96,35 @@ export default function BubblePresetPanel() {
     }
   };
 
+  // 一键把当前整套预设写进预设库文件夹，省去先开窗再保存的步骤
+  const handleQuickSave = async () => {
+    if (userPresets.length === 0) {
+      setNotice("还没有自定义预设，先做一个再保存");
+      return;
+    }
+
+    const suggested = "我的对话框预设";
+    const name = window.prompt("保存到预设库的文件名", suggested);
+    if (!name || !name.trim()) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/presets/file", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), content: exportBubblePresets() })
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "保存失败");
+      }
+      setNotice("已保存 " + userPresets.length + " 个预设到预设库");
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : "保存失败");
+    }
+  };
+
   const handleExportJson = () => {
     const json = exportBubblePresets();
     const parsed = JSON.parse(json) as { presets?: unknown[] };
@@ -212,20 +241,21 @@ export default function BubblePresetPanel() {
       <div className="flex gap-1.5 border-t border-[var(--line-soft)] px-2.5 py-2">
         <button
           type="button"
-          data-open-preset-library="1"
+          data-save-preset="1"
           className={`${actionButtonClass} studio-btn-primary`}
-          onClick={() => openPresetLibrary()}
-          title="打开项目目录下的 presets 文件夹，载入或保存整套预设"
+          onClick={() => void handleQuickSave()}
+          title="把当前整套预设存进项目目录下的 presets 文件夹"
         >
-          预设库文件夹
+          保存预设
         </button>
         <button
           type="button"
+          data-open-preset-library="1"
           className={actionButtonClass}
-          onClick={handleExportJson}
-          title="下载为 JSON 文件，便于发给别人"
+          onClick={() => openPresetLibrary()}
+          title="浏览预设库文件夹，载入或管理已保存的整套预设"
         >
-          下载 JSON
+          预设库
         </button>
       </div>
 

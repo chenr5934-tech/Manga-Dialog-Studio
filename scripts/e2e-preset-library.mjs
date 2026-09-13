@@ -94,7 +94,14 @@ const browser = await puppeteer.launch({
 const page = await browser.newPage();
 const errors = [];
 page.on("pageerror", (error) => errors.push(error.message));
-page.on("dialog", (dialog) => void dialog.accept());
+let promptAnswer = null;
+page.on("dialog", (dialog) => {
+  if (dialog.type() === "prompt") {
+    void dialog.accept(promptAnswer ?? "e2e-prompt-默认名");
+    return;
+  }
+  void dialog.accept();
+});
 
 await page.goto(APP_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
 await page.waitForSelector('[data-preset-id="builtin:speech-right"]', { timeout: 30000 });
@@ -168,6 +175,47 @@ await page.evaluate(() => {
 await sleep(1500);
 const remaining = readdirSync(PRESET_DIR).filter((n) => n.startsWith("e2e-保存测试"));
 record("删除后磁盘文件消失", remaining.length === 0, "残留=" + remaining.length);
+
+// 左侧「保存预设」一键入口
+await page.keyboard.press("Escape");
+await sleep(500);
+const quickSaveExists = await page.evaluate(() => Boolean(document.querySelector("[data-save-preset]")));
+record("左侧提供一键保存预设入口", quickSaveExists);
+
+promptAnswer = "e2e-一键保存";
+await page.click("[data-save-preset]");
+await sleep(1800);
+record(
+  "一键保存写入磁盘",
+  existsSync(join(PRESET_DIR, "e2e-一键保存.json")),
+  readdirSync(PRESET_DIR).filter((n) => n.startsWith("e2e-")).join(", ")
+);
+
+// 预设编辑器里的「保存并存入预设库」
+await page.evaluate(() => {
+  const button = Array.from(document.querySelectorAll("button")).find((el) => el.innerText.trim() === "对话编辑");
+  button?.click();
+});
+await sleep(600);
+await page.evaluate(() => {
+  const button = Array.from(document.querySelectorAll("button")).find((el) => el.innerText.trim() === "新建预设");
+  button?.click();
+});
+await sleep(1000);
+
+const editorOpen = await page.evaluate(() => Boolean(document.querySelector("[data-save-to-library]")));
+record("预设编辑器提供存入预设库按钮", editorOpen);
+
+promptAnswer = "e2e-编辑器存入";
+await page.click("[data-save-to-library]");
+await sleep(1800);
+record(
+  "编辑器一键存入预设库",
+  existsSync(join(PRESET_DIR, "e2e-编辑器存入.json")),
+  existsSync(join(PRESET_DIR, "e2e-编辑器存入.json"))
+    ? "预设数=" + JSON.parse(readFileSync(join(PRESET_DIR, "e2e-编辑器存入.json"), "utf8")).presets.length
+    : "未生成"
+);
 
 record("运行期无控制台错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 

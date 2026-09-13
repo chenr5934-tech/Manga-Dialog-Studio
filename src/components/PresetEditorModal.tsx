@@ -234,6 +234,45 @@ export default function PresetEditorModal() {
     setNotice("已应用到当前气泡");
   };
 
+  // 编辑完直接落盘到预设库：先入库，再把整库写成一份文件
+  const handleSaveAndStore = async () => {
+    const fileName = window.prompt("保存到预设库的文件名", "我的对话框预设");
+    if (!fileName || !fileName.trim()) {
+      return;
+    }
+
+    const nextPreset = normalizePreset({
+      ...draft,
+      id: draft.id.startsWith("user:") ? draft.id : `user:${uuidv4()}`,
+      builtin: false,
+      name: draft.name.trim() || "自定义气泡"
+    });
+
+    const existing = useEditorStore.getState().bubblePresets.filter((preset) => !preset.builtin);
+    const merged = [...existing.filter((preset) => preset.id !== nextPreset.id), nextPreset];
+    savePreset(nextPreset);
+
+    try {
+      const response = await fetch("/api/presets/file", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: fileName.trim(),
+          content: JSON.stringify({ version: 1, presets: merged }, null, 2)
+        })
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "存入预设库失败");
+      }
+      setNotice(`已存入预设库：${fileName.trim()}（含 ${merged.length} 个预设）`);
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : "存入预设库失败");
+    }
+
+    closePresetEditor();
+  };
+
   const handleSavePreset = () => {
     const next = normalizePreset({
       ...draft,
@@ -507,7 +546,7 @@ export default function PresetEditorModal() {
           <span className="text-[11px] text-[var(--text-secondary)]">
             {canApplyToBubble ? "可直接应用到当前选中气泡" : "保存后会出现在左侧预设列表"}
           </span>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <button
               type="button"
               className="studio-btn h-8 px-3 text-xs disabled:cursor-not-allowed disabled:opacity-40"
@@ -516,8 +555,17 @@ export default function PresetEditorModal() {
             >
               应用到气泡
             </button>
-            <button type="button" className="studio-btn studio-btn-primary h-8 px-4 text-xs" onClick={handleSavePreset}>
+            <button type="button" className="studio-btn h-8 px-4 text-xs" onClick={handleSavePreset}>
               保存为预设
+            </button>
+            <button
+              type="button"
+              data-save-to-library="1"
+              className="studio-btn studio-btn-primary h-8 px-4 text-xs"
+              onClick={() => void handleSaveAndStore()}
+              title="保存为预设，同时写进项目目录下的 presets 文件夹"
+            >
+              保存并存入预设库
             </button>
           </div>
         </div>
