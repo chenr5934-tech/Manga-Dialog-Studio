@@ -60,6 +60,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
   const setBackdropColor = useEditorStore((state) => state.setBackdropColor);
   const openPresetEditor = useEditorStore((state) => state.openPresetEditor);
   const openImportDialog = useEditorStore((state) => state.openImportDialog);
+  const openTemplateLibrary = useEditorStore((state) => state.openTemplateLibrary);
   const saveProject = useEditorStore((state) => state.saveProject);
   const saveProjectAs = useEditorStore((state) => state.saveProjectAs);
   const loadProject = useEditorStore((state) => state.loadProject);
@@ -229,6 +230,14 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
           title="按顺序多选导入漫画原稿图片，每张图片成为一个页面"
         >
           导入图片
+        </button>
+        <button
+          className={compactButtonClass}
+          data-open-template-library="1"
+          onClick={() => openTemplateLibrary()}
+          title="整册版式模板：保存当前排版，或从模板新建后只替换画面"
+        >
+          模板
         </button>
         <button
           className={compactButtonClass}

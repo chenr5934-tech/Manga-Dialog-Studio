@@ -81,6 +81,7 @@ type EditorStore = {
   presetEditorSeed?: BubblePreset;
   importDialogOpen: boolean;
   presetLibraryOpen: boolean;
+  templateLibraryOpen: boolean;
   recentTextColors: string[];
   selection?: Selection;
   manualPanelMode: boolean;
@@ -133,6 +134,11 @@ type EditorStore = {
 
   openPresetLibrary: () => void;
   closePresetLibrary: () => void;
+
+  openTemplateLibrary: () => void;
+  closeTemplateLibrary: () => void;
+  buildTemplate: () => string;
+  applyTemplate: (json: string) => void;
 
   openImportDialog: () => void;
   closeImportDialog: () => void;
@@ -1847,6 +1853,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   presetEditorSeed: undefined,
   importDialogOpen: false,
   presetLibraryOpen: false,
+  templateLibraryOpen: false,
   recentTextColors: getInitialRecentTextColors(),
   selection: undefined,
   manualPanelMode: false,
@@ -2506,6 +2513,97 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set(() => ({
       presetLibraryOpen: false
     }));
+  },
+
+  openTemplateLibrary: () => {
+    set(() => ({
+      templateLibraryOpen: true
+    }));
+  },
+
+  closeTemplateLibrary: () => {
+    set(() => ({
+      templateLibraryOpen: false
+    }));
+  },
+
+  // 模板只保留版式：页面尺寸、分镜位置形状、气泡摆位与样式，图片一律剥离
+  buildTemplate: () => {
+    const project = get().project;
+    const template = {
+      kind: "manga-dialog-studio-template",
+      version: 1,
+      name: project.name,
+      pages: project.pages.map((page) => ({
+        id: page.id,
+        name: page.name,
+        canvas: page.canvas,
+        backdropColor: page.backdropColor,
+        panels: page.panels.map((panel) => ({
+          ...panel,
+          image: undefined
+        })),
+        bubbles: page.bubbles.map((bubble) => ({
+          ...bubble,
+          id: bubble.id
+        }))
+      })),
+      activePageId: project.activePageId
+    };
+    return JSON.stringify(template, null, 2);
+  },
+
+  applyTemplate: (json) => {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(json);
+    } catch {
+      set((state) => ({
+        ...withNotice(state, "模板内容无法解析")
+      }));
+      return;
+    }
+
+    const normalized = normalizeLoadedState(parsed);
+    if (!normalized) {
+      set((state) => ({
+        ...withNotice(state, "模板格式无效")
+      }));
+      return;
+    }
+
+    if (
+      get().project.pages.length > 0 &&
+      !window.confirm("从模板新建会替换当前项目，未保存的内容将丢失。继续？")
+    ) {
+      return;
+    }
+
+    revokeObjectUrls(get().transientObjectUrls);
+
+    set((state) => {
+      const historyState = withHistory(
+        state,
+        {
+          ...normalized.project,
+          id: normalized.project.id || uuidv4(),
+          name: `${normalized.project.name || "未命名项目"}（模板）`
+        },
+        `已从模板新建，共 ${normalized.project.pages.length} 页`
+      );
+
+      if (!historyState) {
+        return state;
+      }
+
+      return {
+        ...historyState,
+        selection: undefined,
+        assetRefMap: {},
+        transientObjectUrls: [],
+        templateLibraryOpen: false
+      };
+    });
   },
 
   openImportDialog: () => {

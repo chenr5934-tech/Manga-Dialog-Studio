@@ -112,9 +112,14 @@ await sleep(1200);
 
 const libraryOpen = await page.evaluate(() => {
   const el = document.querySelector('[data-preset-library="1"]');
-  return el ? el.innerText.slice(0, 120) : null;
+  return el ? el.innerText.replace(/\s+/g, " ") : null;
 });
-record("预设库小窗可打开并显示目录", Boolean(libraryOpen && libraryOpen.includes("presets")), String(libraryOpen).slice(0, 60));
+const statesPresetScope = Boolean(libraryOpen && libraryOpen.includes("气泡"));
+record(
+  "预设库小窗可打开并显示目录",
+  Boolean(libraryOpen && libraryOpen.includes("presets")),
+  statesPresetScope ? "已标注为气泡预设" : "缺少范围说明"
+);
 
 const listedInUi = await page.evaluate(
   (name) => Boolean(document.querySelector('[data-preset-file="' + name + '"]')),

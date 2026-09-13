@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useEditorStore } from "../lib/store";
 
-type PresetFileEntry = {
+type TemplateFileEntry = {
   name: string;
   size: number;
   modified: number;
   count: number;
+  detail: string;
   readable: boolean;
 };
 
@@ -35,17 +36,21 @@ function formatTime(ms: number) {
   );
 }
 
-export default function PresetLibraryModal() {
-  const open = useEditorStore((state) => state.presetLibraryOpen);
-  const closePresetLibrary = useEditorStore((state) => state.closePresetLibrary);
-  const importBubblePresets = useEditorStore((state) => state.importBubblePresets);
-  const exportBubblePresets = useEditorStore((state) => state.exportBubblePresets);
+export default function TemplateLibraryModal() {
+  const open = useEditorStore((state) => state.templateLibraryOpen);
+  const closeTemplateLibrary = useEditorStore((state) => state.closeTemplateLibrary);
+  const buildTemplate = useEditorStore((state) => state.buildTemplate);
+  const applyTemplate = useEditorStore((state) => state.applyTemplate);
   const setNotice = useEditorStore((state) => state.setNotice);
-  const userPresetCount = useEditorStore(
-    (state) => state.bubblePresets.filter((preset) => !preset.builtin).length
+  const pageCount = useEditorStore((state) => state.project.pages.length);
+  const panelCount = useEditorStore((state) =>
+    state.project.pages.reduce((sum, page) => sum + page.panels.length, 0)
+  );
+  const bubbleCount = useEditorStore((state) =>
+    state.project.pages.reduce((sum, page) => sum + page.bubbles.length, 0)
   );
 
-  const [files, setFiles] = useState<PresetFileEntry[]>([]);
+  const [files, setFiles] = useState<TemplateFileEntry[]>([]);
   const [dir, setDir] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,15 +61,15 @@ export default function PresetLibraryModal() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/presets", { cache: "no-store" });
+      const response = await fetch("/api/templates", { cache: "no-store" });
       const payload = await response.json();
       if (!response.ok) {
-        throw new Error(payload?.error ?? "读取预设文件夹失败");
+        throw new Error(payload?.error ?? "读取模板文件夹失败");
       }
       setFiles(Array.isArray(payload.files) ? payload.files : []);
       setDir(String(payload.dir ?? ""));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "读取预设文件夹失败");
+      setError(caught instanceof Error ? caught.message : "读取模板文件夹失败");
     } finally {
       setLoading(false);
     }
@@ -78,6 +83,19 @@ export default function PresetLibraryModal() {
   }, [open, refresh]);
 
   useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeTemplateLibrary();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [closeTemplateLibrary, open]);
+
+  useEffect(() => {
     if (open) {
       return;
     }
@@ -86,46 +104,33 @@ export default function PresetLibraryModal() {
     setSaveName("");
   }, [open]);
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        closePresetLibrary();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closePresetLibrary, open]);
-
   if (!open) {
     return null;
   }
 
-  const loadFile = async (name: string) => {
+  const useTemplate = async (name: string) => {
     setBusyName(name);
     try {
-      const response = await fetch("/api/presets/file?name=" + encodeURIComponent(name), { cache: "no-store" });
+      const response = await fetch("/api/templates/file?name=" + encodeURIComponent(name), { cache: "no-store" });
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.error ?? "读取失败");
       }
-      importBubblePresets(await response.text());
+      applyTemplate(await response.text());
     } catch (caught) {
-      setNotice(caught instanceof Error ? caught.message : "载入预设失败");
+      setNotice(caught instanceof Error ? caught.message : "从模板新建失败");
     } finally {
       setBusyName(null);
     }
   };
 
   const removeFile = async (name: string) => {
-    if (!window.confirm("删除预设文件「" + name + "」？此操作会从磁盘上移除该文件。")) {
+    if (!window.confirm("删除模板「" + name + "」？此操作会从磁盘上移除该文件。")) {
       return;
     }
     setBusyName(name);
     try {
-      const response = await fetch("/api/presets/file?name=" + encodeURIComponent(name), { method: "DELETE" });
+      const response = await fetch("/api/templates/file?name=" + encodeURIComponent(name), { method: "DELETE" });
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.error ?? "删除失败");
@@ -139,25 +144,20 @@ export default function PresetLibraryModal() {
     }
   };
 
-  const saveToLibrary = async () => {
-    if (userPresetCount === 0) {
-      setNotice("当前没有自定义预设可保存");
-      return;
-    }
-
-    const name = saveName.trim() || "我的对话框预设";
+  const saveAsTemplate = async () => {
+    const name = saveName.trim() || "我的漫画版式";
     setBusyName(name);
     try {
-      const response = await fetch("/api/presets/file", {
+      const response = await fetch("/api/templates/file", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, content: exportBubblePresets() })
+        body: JSON.stringify({ name, content: buildTemplate() })
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
         throw new Error(payload?.error ?? "保存失败");
       }
-      setNotice("已保存 " + userPresetCount + " 个预设到文件夹");
+      setNotice("已保存模板「" + name + "」（不含图片）");
       setSaveName("");
       await refresh();
     } catch (caught) {
@@ -167,51 +167,31 @@ export default function PresetLibraryModal() {
     }
   };
 
-  const downloadJson = () => {
-    if (userPresetCount === 0) {
-      setNotice("还没有自定义预设可下载");
-      return;
-    }
-    const blob = new Blob([exportBubblePresets()], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "dialog-presets.json";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
-    setNotice("已下载 " + userPresetCount + " 个预设");
-  };
-
   const revealFolder = async () => {
     try {
-      await fetch("/api/presets/reveal", { method: "POST" });
+      await fetch("/api/templates/reveal", { method: "POST" });
     } catch {
       setNotice("无法打开文件夹");
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4" onPointerDown={closePresetLibrary}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4" onPointerDown={closeTemplateLibrary}>
       <div
-        data-preset-library="1"
+        data-template-library="1"
         className="studio-surface flex max-h-full w-full max-w-3xl flex-col overflow-hidden"
         onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">Preset Library</p>
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">预设库文件夹</h3>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">Layout Templates</p>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">整册版式模板</h3>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <button type="button" className="studio-btn h-7 px-3 text-xs" onClick={downloadJson} title="下载为 JSON，便于发给别人">
-              下载 JSON
-            </button>
             <button type="button" className="studio-btn h-7 px-3 text-xs" onClick={() => void revealFolder()}>
               打开文件夹
             </button>
-            <button type="button" className="studio-btn h-7 px-3 text-xs" onClick={closePresetLibrary}>
+            <button type="button" className="studio-btn h-7 px-3 text-xs" onClick={closeTemplateLibrary}>
               关闭
             </button>
           </div>
@@ -219,10 +199,11 @@ export default function PresetLibraryModal() {
 
         <div className="space-y-1 border-b border-[var(--line-soft)] px-4 py-2">
           <p className="text-[11px] text-[var(--text-primary)]">
-            这里存的是<strong>单个对话框（气泡）的外观模板</strong>，可跨作品反复套用。
+            模板保存的是<strong>整册排版</strong>：页面尺寸、分镜位置与形状、气泡的摆位与样式。
           </p>
           <p className="text-[11px] text-[var(--text-secondary)]">
-            整册漫画的排版（分镜、气泡摆位）请用顶部的「模板」按钮。
+            图片不会存进模板。从模板新建后画面是空的，把新原稿导入到各分镜即可，版式不用重做。
+            单个对话框的外观请用左侧的「预设库」。
           </p>
           <p className="truncate text-[11px] text-[var(--text-secondary)]" title={dir}>
             目录：{dir || "读取中..."}
@@ -238,31 +219,30 @@ export default function PresetLibraryModal() {
 
           {!error && files.length === 0 && !loading ? (
             <p className="rounded-lg border border-dashed border-[var(--line-strong)] px-3 py-6 text-center text-xs text-[var(--text-secondary)]">
-              文件夹里还没有预设。把当前预设保存进去，以后换电脑或做新一册时直接载入即可。
+              还没有模板。把当前排好版的这一册存成模板，下一册就能直接套用，只换画面。
             </p>
           ) : null}
 
           {files.map((file) => (
             <div
               key={file.name}
-              data-preset-file={file.name}
+              data-template-file={file.name}
               className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--line-soft)] bg-[var(--panel-1)] px-2.5 py-2"
             >
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-xs font-semibold text-[var(--text-primary)]">{file.name}</span>
                 <span className="block text-[10px] text-[var(--text-secondary)]">
-                  {file.readable ? file.count + " 个预设" : "内容无法解析"} · {formatSize(file.size)} ·{" "}
-                  {formatTime(file.modified)}
+                  {file.readable ? file.detail : "内容无法解析"} · {formatSize(file.size)} · {formatTime(file.modified)}
                 </span>
               </span>
               <button
                 type="button"
-                data-preset-load={file.name}
+                data-template-use={file.name}
                 className="studio-btn studio-btn-primary h-7 px-3 text-[11px] disabled:opacity-40"
                 disabled={busyName === file.name}
-                onClick={() => void loadFile(file.name)}
+                onClick={() => void useTemplate(file.name)}
               >
-                载入
+                从模板新建
               </button>
               <button
                 type="button"
@@ -277,28 +257,26 @@ export default function PresetLibraryModal() {
         </div>
 
         <div className="border-t border-[var(--line-soft)] px-4 py-3">
-          <p className="mb-2 text-[11px] font-semibold text-[var(--text-primary)]">保存当前预设到文件夹</p>
+          <p className="mb-2 text-[11px] font-semibold text-[var(--text-primary)]">把当前项目存为模板</p>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[11px] text-[var(--text-secondary)]">
-              {userPresetCount === 0
-                ? "还没有自定义预设，先用左侧「导入对话框图」或「编辑填字区」做一个"
-                : `会把这 ${userPresetCount} 个自定义预设写成一个文件`}
+              当前 {pageCount} 页 · {panelCount} 分镜 · {bubbleCount} 气泡（图片不入库）
             </span>
             <input
               className="studio-input h-8 min-w-[180px] flex-1 px-2 text-xs"
-              placeholder="文件名，例如：青春校园-对话框"
+              placeholder="模板名，例如：四格日常版式"
               value={saveName}
-              data-preset-save-input="1"
+              data-template-save-input="1"
               onChange={(event) => setSaveName(event.target.value)}
             />
             <button
               type="button"
-              data-preset-save-button="1"
+              data-template-save-button="1"
               className="studio-btn studio-btn-primary h-8 px-4 text-xs disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={userPresetCount === 0 || busyName !== null}
-              onClick={() => void saveToLibrary()}
+              disabled={busyName !== null}
+              onClick={() => void saveAsTemplate()}
             >
-              {userPresetCount === 0 ? "暂无可保存的预设" : "保存到文件夹"}
+              保存为模板
             </button>
           </div>
         </div>

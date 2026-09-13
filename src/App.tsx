@@ -5,6 +5,7 @@ import BubblePresetPanel from "./components/BubblePresetPanel";
 import ImportImagesModal from "./components/ImportImagesModal";
 import PresetEditorModal from "./components/PresetEditorModal";
 import PresetLibraryModal from "./components/PresetLibraryModal";
+import TemplateLibraryModal from "./components/TemplateLibraryModal";
 import ThumbRail from "./components/ThumbRail";
 import Toolbar from "./components/Toolbar";
 import { getActivePage, useEditorStore } from "./lib/store";
@@ -187,6 +188,7 @@ export default function App() {
 
       <PresetEditorModal />
       <PresetLibraryModal />
+      <TemplateLibraryModal />
       <ImportImagesModal />
     </div>
   );
