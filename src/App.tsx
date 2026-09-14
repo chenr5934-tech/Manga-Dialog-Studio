@@ -2,12 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import CanvasEditor, { CanvasEditorHandle } from "./components/CanvasEditor";
 import InspectorPanel from "./components/InspectorPanel";
 import AgentPanel from "./components/AgentPanel";
-import BubblePresetPanel from "./components/BubblePresetPanel";
+import LeftToolPanel from "./components/LeftToolPanel";
 import ImportImagesModal from "./components/ImportImagesModal";
 import PresetEditorModal from "./components/PresetEditorModal";
 import PresetLibraryModal from "./components/PresetLibraryModal";
 import TemplateLibraryModal from "./components/TemplateLibraryModal";
-import StickerPickerModal from "./components/StickerPickerModal";
 import ThumbRail from "./components/ThumbRail";
 import Toolbar from "./components/Toolbar";
 import { getActivePage, useEditorStore } from "./lib/store";
@@ -126,7 +125,7 @@ export default function App() {
 
         <section className="grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[260px_minmax(640px,1fr)_336px_124px]">
           <div className="min-h-0">
-            <BubblePresetPanel />
+            <LeftToolPanel onExportPng={exportPng} onExportPdf={exportPdf} onExportZip={exportZip} />
           </div>
 
           <div className="min-h-0">
@@ -192,7 +191,6 @@ export default function App() {
       <PresetEditorModal />
       <PresetLibraryModal />
       <TemplateLibraryModal />
-      <StickerPickerModal />
       <ImportImagesModal />
     </div>
   );

@@ -330,6 +330,7 @@ export default function ImportImagesModal() {
 
         <input
           ref={fileInputRef}
+          data-import-images-input="1"
           type="file"
           multiple
           accept={IMAGE_FILE_ACCEPT}

@@ -115,7 +115,7 @@ await assetPage.close();
 
 const opened = await clickByText("导入图片");
 await sleep(800);
-const input = await page.$('input[type="file"][multiple]');
+const input = await page.$("[data-import-images-input]");
 await input.uploadFile(...sources);
 await sleep(3000);
 await page.click("[data-import-confirm]");

@@ -100,6 +100,8 @@ type EditorStore = {
   recentTextColors: string[];
   selection?: Selection;
   manualPanelMode: boolean;
+  // 拖拽扣选时画出来的是矩形还是椭圆（圆形扣选）
+  manualPanelShape: "rect" | "ellipse";
   polygonTool: boolean;
   snapSizeTo16: boolean;
   historyPast: HistoryEntry[];
@@ -191,7 +193,7 @@ type EditorStore = {
 
   createPolygonPanelFromPoints: (points: PanelPoint[]) => void;
 
-  toggleManualPanelMode: (enabled?: boolean) => void;
+  toggleManualPanelMode: (enabled?: boolean, shape?: "rect" | "ellipse") => void;
   togglePolygonTool: (enabled?: boolean) => void;
   toggleSnapSizeTo16: (enabled?: boolean) => void;
 
@@ -1960,6 +1962,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   recentTextColors: getInitialRecentTextColors(),
   selection: undefined,
   manualPanelMode: false,
+  manualPanelShape: "rect",
   polygonTool: false,
   snapSizeTo16: false,
   historyPast: [],
@@ -3355,18 +3358,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  toggleManualPanelMode: (enabled) => {
+  toggleManualPanelMode: (enabled, shape) => {
     set((state) => {
       const nextEnabled = enabled ?? !state.manualPanelMode;
+      const nextShape = shape ?? state.manualPanelShape;
+      const label = nextShape === "ellipse" ? "圆形扣选" : "矩形扣选";
       return {
         manualPanelMode: nextEnabled,
+        manualPanelShape: nextShape,
         polygonTool: nextEnabled ? false : state.polygonTool,
         storyboardMode: nextEnabled ? "storyboard" : state.storyboardMode,
         // 进入扣选即清空选中，避免残留的选中框干扰取景
         selection: nextEnabled ? undefined : state.selection,
         ...withNotice(
           state,
-          nextEnabled ? "矩形扣选已开启：画布已锁定，拖拽即可取景（Esc 退出）" : "矩形扣选已关闭"
+          nextEnabled ? label + "已开启：画布已锁定，拖拽即可取景（Esc 退出）" : label + "已关闭"
         )
       };
     });

@@ -86,7 +86,7 @@ record("可正常选中分镜并读到坐标", before.x !== null && before.y !==
 const panelsBefore = await readPanelCount();
 
 // B) 开启矩形扣选
-await clickByText("矩形扣选");
+await clickByText("矩形");
 await sleep(600);
 const lockHint = await page.evaluate(() => document.body.innerText.includes("画布已锁定"));
 record("进入扣选后显示锁定提示", lockHint);
@@ -160,7 +160,7 @@ record(
 );
 
 // G) Esc 退出：开启扣选后按一次 Esc 应直接退出工具
-await clickByText("矩形扣选");
+await clickByText("矩形");
 await sleep(500);
 await page.keyboard.press("Escape");
 await sleep(600);
@@ -168,7 +168,7 @@ const escExited = await page.evaluate(() => !document.body.innerText.includes("�
 record("扣选中按 Esc 可退出", escExited);
 
 // H) 松手位置超出画布可视区时取景不应丢失（改为 window 监听后应可完成）
-await clickByText("矩形扣选");
+await clickByText("矩形");
 await sleep(600);
 const beforeOverflow = await readPanelCount();
 const overStartX = canvasBox.x + 200;

@@ -501,6 +501,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
   const activePage = useEditorStore((state) => getActivePage(state.project));
   const selection = useEditorStore((state) => state.selection);
   const manualPanelMode = useEditorStore((state) => state.manualPanelMode);
+  const manualPanelShape = useEditorStore((state) => state.manualPanelShape);
   const snapSizeTo16 = useEditorStore((state) => state.snapSizeTo16);
 
   const setNotice = useEditorStore((state) => state.setNotice);
@@ -513,6 +514,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
   const updatePanel = useEditorStore((state) => state.updatePanel);
   const updateBubble = useEditorStore((state) => state.updateBubble);
   const createPanelFromRect = useEditorStore((state) => state.createPanelFromRect);
+  const createEllipsePanelFromRect = useEditorStore((state) => state.createEllipsePanelFromRect);
   const addBubbleFromPreset = useEditorStore((state) => state.addBubbleFromPreset);
   const toggleManualPanelMode = useEditorStore((state) => state.toggleManualPanelMode);
   const togglePolygonTool = useEditorStore((state) => state.togglePolygonTool);
@@ -1030,12 +1032,24 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
         return;
       }
 
-      createPanelFromRect(start.x, start.y, width, height);
+      if (manualPanelShape === "ellipse") {
+        createEllipsePanelFromRect(start.x, start.y, width, height);
+      } else {
+        createPanelFromRect(start.x, start.y, width, height);
+      }
     };
 
     window.addEventListener("mouseup", onWindowMouseUp);
     return () => window.removeEventListener("mouseup", onWindowMouseUp);
-  }, [agentScopePicking, createPanelFromRect, manualPanelMode, setAgentScope, zoom]);
+  }, [
+    agentScopePicking,
+    createEllipsePanelFromRect,
+    createPanelFromRect,
+    manualPanelMode,
+    manualPanelShape,
+    setAgentScope,
+    zoom
+  ]);
 
   const adjustZoom = (delta: number) => {
     setZoom((current) => clampZoom(current + delta));
@@ -1472,18 +1486,31 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                 </>
               )}
 
-              {draftRect && manualPanelMode && (
-                <Rect
-                  x={draftRect.width >= 0 ? draftRect.x : draftRect.x + draftRect.width}
-                  y={draftRect.height >= 0 ? draftRect.y : draftRect.y + draftRect.height}
-                  width={Math.abs(draftRect.width)}
-                  height={Math.abs(draftRect.height)}
-                  fill="rgba(37, 99, 235, 0.2)"
-                  stroke="#1d4ed8"
-                  strokeWidth={2}
-                  dash={[8, 6]}
-                />
-              )}
+              {draftRect && manualPanelMode ? (
+                manualPanelShape === "ellipse" ? (
+                  <Ellipse
+                    x={draftRect.x + draftRect.width / 2}
+                    y={draftRect.y + draftRect.height / 2}
+                    radiusX={Math.abs(draftRect.width) / 2}
+                    radiusY={Math.abs(draftRect.height) / 2}
+                    fill="rgba(37, 99, 235, 0.2)"
+                    stroke="#1d4ed8"
+                    strokeWidth={2}
+                    dash={[8, 6]}
+                  />
+                ) : (
+                  <Rect
+                    x={draftRect.width >= 0 ? draftRect.x : draftRect.x + draftRect.width}
+                    y={draftRect.height >= 0 ? draftRect.y : draftRect.y + draftRect.height}
+                    width={Math.abs(draftRect.width)}
+                    height={Math.abs(draftRect.height)}
+                    fill="rgba(37, 99, 235, 0.2)"
+                    stroke="#1d4ed8"
+                    strokeWidth={2}
+                    dash={[8, 6]}
+                  />
+                )
+              ) : null}
 
               <Transformer
                 ref={transformerRef}

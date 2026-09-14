@@ -1,5 +1,5 @@
 import puppeteer from "puppeteer-core";
-import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
@@ -8,6 +8,13 @@ const ROOT = process.env.PROJECT_ROOT ?? "D:/dsh工作区/MangaDialogStudio";
 const STICKER_DIR = join(ROOT, "stickers");
 
 mkdirSync(STICKER_DIR, { recursive: true });
+// 产品把导入的贴纸累积进同一个文件；测试前把它挪开，结束后原样放回，
+// 否则既会污染真实素材，也会让"是否新增"的判定在第二次运行后失效
+const autoStickerFile = join(STICKER_DIR, "自定义贴纸.json");
+const autoStickerBackup = existsSync(autoStickerFile) ? readFileSync(autoStickerFile, "utf8") : null;
+if (existsSync(autoStickerFile)) {
+  unlinkSync(autoStickerFile);
+}
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const results = [];
 function record(name, ok, detail = "") {
@@ -65,7 +72,7 @@ const readOverlayFields = () =>
   });
 
 async function openPicker() {
-  await page.click("[data-hero-sticker]");
+  await page.click('[data-tool="stickers"]');
   await sleep(700);
 }
 
@@ -99,7 +106,7 @@ const firstId = await page.evaluate(
 );
 await page.click('[data-sticker-id="' + firstId + '"]');
 await sleep(800);
-await page.click("[data-sticker-close]");
+// 贴纸已并入左侧工具栏，不再有需要关闭的弹窗
 await sleep(800);
 
 const fields = await readOverlayFields();
@@ -153,20 +160,25 @@ record(
   boxProbe ? "像素 " + boxProbe.width + "x" + boxProbe.height + " 命中=" + boxProbe.count : "未找到绿色像素"
 );
 
-// 4) 存进 stickers/ 文件夹
-await openPicker();
-await page.click('[data-sticker-group="自定义"]');
-await sleep(500);
-await page.click("[data-sticker-save-library]");
-await sleep(2200);
-const savedFile = join(STICKER_DIR, "e2e-我的贴纸.json");
+// 4) 导入即落盘：不需要手动保存，贴纸导入后就写进了 stickers/
 record(
-  "保存到贴纸库真的写进 stickers/ 文件夹",
-  existsSync(savedFile),
-  existsSync(savedFile) ? "文件=" + readdirSync(STICKER_DIR).filter((n) => n.startsWith("e2e-")).join(",") : "未生成"
+  "导入后自动写进 stickers/ 文件夹",
+  existsSync(autoStickerFile),
+  existsSync(autoStickerFile) ? "文件=" + autoStickerFile.split(/[\\/]/).pop() : "未生成"
+);
+
+const savedStickers = existsSync(autoStickerFile)
+  ? JSON.parse(readFileSync(autoStickerFile, "utf8")).stickers
+  : null;
+record(
+  "落盘的贴纸文件里确实有两张导入的贴纸",
+  Array.isArray(savedStickers) && savedStickers.length === 2,
+  "文件内贴纸数=" + (Array.isArray(savedStickers) ? savedStickers.length : "无")
 );
 
 // 5) 从贴纸库读取
+await page.click('[data-sticker-group="自定义"]');
+await sleep(500);
 await page.click("[data-sticker-load-library]");
 await sleep(1500);
 const listed = await page.evaluate(() => document.querySelectorAll("[data-sticker-library-load]").length);
@@ -244,7 +256,7 @@ await page.evaluate(() => {
     writable: true
   });
 });
-await page.click("[data-sticker-close]");
+// 贴纸已并入左侧工具栏，不再有需要关闭的弹窗
 await sleep(400);
 await page.evaluate(() => {
   const button = Array.from(document.querySelectorAll("button")).find(
@@ -317,11 +329,12 @@ record(
 
 record("运行期无控制台错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 
-// 清理测试产生的贴纸库文件
-for (const name of readdirSync(STICKER_DIR)) {
-  if (name.startsWith("e2e-")) {
-    unlinkSync(join(STICKER_DIR, name));
-  }
+// 恢复测试前的贴纸库：原本没有就删掉，原本有就放回原内容
+if (existsSync(autoStickerFile)) {
+  unlinkSync(autoStickerFile);
+}
+if (autoStickerBackup !== null) {
+  writeFileSync(autoStickerFile, autoStickerBackup, "utf8");
 }
 
 await browser.close();

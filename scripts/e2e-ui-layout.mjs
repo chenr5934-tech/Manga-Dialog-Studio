@@ -26,7 +26,7 @@ page.on("dialog", (dialog) => void dialog.accept());
 
 await page.goto(APP_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
 await page.waitForSelector('[data-preset-id="builtin:speech-right"]', { timeout: 30000 });
-await sleep(800);
+await sleep(900);
 
 async function clickByText(label) {
   for (const handle of await page.$$("button")) {
@@ -39,138 +39,149 @@ async function clickByText(label) {
   return false;
 }
 
-const readRows = () =>
+const toolbox = await page.evaluate(() => {
+  const tools = Array.from(document.querySelectorAll("[data-tool]")).map((element) =>
+    (element.innerText ?? "").trim()
+  );
+  const groups = Array.from(document.querySelectorAll("aside p"))
+    .map((element) => (element.innerText ?? "").trim())
+    .filter((text) => ["扣选", "保存", "辅助"].includes(text));
+  const leftPanel = document.querySelector("aside");
+  return {
+    tools,
+    groups,
+    overflow: leftPanel ? leftPanel.scrollWidth - leftPanel.clientWidth : -1
+  };
+});
+
+record(
+  "左侧工具栏按用途分成三组",
+  toolbox.groups.length === 3,
+  toolbox.groups.join(" / ")
+);
+record(
+  "扣选组收齐矩形、多边形、圆形",
+  toolbox.tools.includes("矩形") && toolbox.tools.includes("多边形") && toolbox.tools.includes("圆形"),
+  toolbox.tools.slice(0, 3).join(" / ")
+);
+record(
+  "保存组放导入图片与导出",
+  toolbox.tools.includes("导入图片") && toolbox.tools.includes("导出"),
+  toolbox.tools.filter((text) => ["导入图片", "导出"].includes(text)).join(" / ")
+);
+record(
+  "辅助组放 Agent、模板、贴纸、对话框预设",
+  ["Agent", "模板", "贴纸", "对话框预设"].every((label) => toolbox.tools.includes(label)),
+  toolbox.tools.filter((text) => ["Agent", "模板", "贴纸", "对话框预设"].includes(text)).join(" / ")
+);
+record("左侧工具栏不产生横向滚动", toolbox.overflow <= 0, "溢出=" + toolbox.overflow);
+
+// 顶部不再重复这些入口
+const headerText = await page.evaluate(() => {
+  const header = document.querySelector("header");
+  return header ? header.innerText : "";
+});
+record(
+  "顶部不再重复左侧已有的按钮",
+  !headerText.includes("导入图片") &&
+    !headerText.includes("Agent 模式") &&
+    !headerText.includes("矩形扣选") &&
+    !headerText.includes("多边形扣选"),
+  headerText.split("\n").filter(Boolean).slice(0, 6).join(" / ")
+);
+
+const contentModeOf = () =>
+  page.evaluate(() => document.querySelector("[data-tool-content]")?.getAttribute("data-tool-content") ?? null);
+const footerText = () =>
   page.evaluate(() => {
-    const header = document.querySelector("header");
-    const rows = Array.from(header.children).filter((element) => element.tagName === "DIV").slice(0, 2);
-    return rows.map((row) => ({
-      overflow: row.scrollWidth - row.clientWidth,
-      buttons: Array.from(row.querySelectorAll("button")).map((button) => {
-        const box = button.getBoundingClientRect();
-        return {
-          text: (button.innerText ?? "").trim(),
-          height: Math.round(box.height),
-          width: Math.round(box.width),
-          name: Boolean((button.title ?? "").trim()) || Boolean(button.getAttribute("aria-label"))
-        };
-      })
-    }));
+    const content = document.querySelector("[data-tool-content]");
+    const footer = content?.parentElement?.querySelector(":scope > div:last-of-type");
+    return footer ? footer.innerText : "";
   });
 
-const rows = await readRows();
-const topRow = rows[0];
-const secondRow = rows[1];
-const topLabels = topRow.buttons.map((item) => item.text);
-const secondLabels = secondRow.buttons.map((item) => item.text);
+// 默认显示对话框预设，底部是对应的导入入口
+record("默认内容区是对话框预设", (await contentModeOf()) === "presets", "模式=" + (await contentModeOf()));
+const presetFooter = await footerText();
+record(
+  "对话框预设下方是「导入自定义对话框」",
+  presetFooter.includes("导入自定义对话框"),
+  presetFooter.split("\n").filter(Boolean).join(" / ")
+);
+record(
+  "旧的「保存预设 / 预设库」已移除",
+  !presetFooter.includes("保存预设") && !presetFooter.includes("预设库"),
+  presetFooter.split("\n").filter(Boolean).join(" / ")
+);
+await page.screenshot({ path: SHOT_DIR + "/toolbox-presets.png" });
 
-record(
-  "第一行集中高频主操作",
-  ["导入图片", "贴纸", "模板", "导出", "Agent 模式"].every((label) => topLabels.includes(label)),
-  topLabels.filter(Boolean).join(" / ")
-);
-record(
-  "第一行不再混入低频项目操作",
-  !topLabels.includes("另存为") && !topLabels.includes("加载项目") && !topLabels.includes("保存项目"),
-  "第一行按钮数=" + topRow.buttons.length
-);
-record(
-  "主操作按钮达到可点尺寸",
-  topRow.buttons
-    .filter((item) => ["导入图片", "贴纸", "模板", "导出", "Agent 模式"].includes(item.text))
-    .every((item) => item.height >= 32 && item.width >= 48),
-  topRow.buttons
-    .filter((item) => ["导入图片", "模板", "导出", "Agent 模式"].includes(item.text))
-    .map((item) => item.text + "=" + item.width + "x" + item.height)
-    .join(" ")
-);
-record(
-  "顶栏不产生横向滚动",
-  topRow.overflow <= 0 && secondRow.overflow <= 0,
-  "第一行溢出=" + topRow.overflow + " 第二行溢出=" + secondRow.overflow
-);
-record(
-  "每个按钮都有可访问名称",
-  [...topRow.buttons, ...secondRow.buttons].every((item) => item.text.length > 0 || item.name),
-  "无名称按钮=" +
-    [...topRow.buttons, ...secondRow.buttons].filter((item) => !item.text && !item.name).length
-);
-
-// 已被合并删除的重复入口不应再出现
-const bodyText = await page.evaluate(() => document.body.innerText);
-const removed = ["新建预设", "+ 椭圆气泡", "手绘分镜", "新增文字", "画布设置"];
-record(
-  "重复入口已从界面移除",
-  removed.every((label) => !bodyText.includes(label)),
-  removed.filter((label) => bodyText.includes(label)).join(" / ") || "全部已移除"
-);
-await page.screenshot({ path: SHOT_DIR + "/ui-toolbar-storyboard.png" });
-
-// 对话编辑模式下第二行应换成气泡工具
-await clickByText("对话编辑");
+// 切到贴纸：内容区与底部入口一起换
+await page.click('[data-tool="stickers"]');
 await sleep(600);
-const rowsB = await readRows();
-const secondB = rowsB[1].buttons.map((item) => item.text);
+record("点贴纸后内容区切到贴纸", (await contentModeOf()) === "stickers", "模式=" + (await contentModeOf()));
+const stickerGrid = await page.evaluate(() => document.querySelectorAll("[data-sticker-id]").length);
+record("贴纸内容区列出贴纸", stickerGrid >= 5, "贴纸数=" + stickerGrid);
+const stickerFooter = await footerText();
 record(
-  "第二行随模式切换上下文工具",
-  secondB.includes("+ 圆角气泡") && !secondB.includes("多边形扣选"),
-  secondB.filter(Boolean).join(" / ")
+  "贴纸下方是「导入自定义贴纸」",
+  stickerFooter.includes("导入自定义贴纸"),
+  stickerFooter.split("\n").filter(Boolean).join(" / ")
 );
-record("对话编辑下仍不横向滚动", rowsB[1].overflow <= 0, "溢出=" + rowsB[1].overflow);
-await page.screenshot({ path: SHOT_DIR + "/ui-toolbar-dialogue.png" });
+await page.screenshot({ path: SHOT_DIR + "/toolbox-stickers.png" });
 
-// 抽屉：画布设置已并入布局；项目文件收在更多里
-await clickByText("布局");
-await sleep(600);
-const drawerText = await page.evaluate(() => {
-  const aside = document.querySelector("header aside");
-  return aside ? aside.innerText : "";
-});
-record(
-  "画布设置已并入布局抽屉",
-  drawerText.includes("画布") && drawerText.includes("应用画布") && drawerText.includes("新建分镜"),
-  drawerText.split("\n").filter(Boolean).slice(0, 5).join(" / ")
-);
-record("布局抽屉内不再出现重复的手绘分镜", !drawerText.includes("手绘分镜"), "");
-await page.screenshot({ path: SHOT_DIR + "/ui-drawer-layout.png" });
-await clickByText("关闭");
+// 切回对话框预设
+await page.click('[data-tool="presets"]');
 await sleep(500);
+record("可以切回对话框预设", (await contentModeOf()) === "presets", "");
 
-await clickByText("更多");
-await sleep(600);
-const projectDrawer = await page.evaluate(() => {
-  const aside = document.querySelector("header aside");
-  return aside ? aside.innerText : "";
+// 导出也在这里展开
+await page.click('[data-tool="export"]');
+await sleep(500);
+const exportPanel = await page.evaluate(() => ({
+  mode: document.querySelector("[data-tool-content]")?.getAttribute("data-tool-content"),
+  hasZip: Boolean(document.querySelector("[data-export-zip]")),
+  text: document.querySelector("[data-tool-content]")?.innerText ?? ""
+}));
+record(
+  "点导出后内容区显示三种导出方式",
+  exportPanel.mode === "export" &&
+    exportPanel.hasZip &&
+    exportPanel.text.includes("导出 PNG（当前页）") &&
+    exportPanel.text.includes("导出 PDF（全部页）"),
+  exportPanel.mode
+);
+
+// 圆形扣选可以开启并高亮
+await page.click('[data-tool="panel-ellipse"]');
+await sleep(500);
+const ellipseActive = await page.evaluate(() => {
+  const button = document.querySelector('[data-tool="panel-ellipse"]');
+  return {
+    highlighted: button ? button.className.includes("studio-btn-primary") : false,
+    hint: document.body.innerText.includes("圆形扣选已开启")
+  };
 });
 record(
-  "低频文件操作收进更多抽屉",
-  projectDrawer.includes("另存为") && projectDrawer.includes("加载项目"),
-  projectDrawer.split("\n").filter(Boolean).slice(0, 4).join(" / ")
+  "圆形扣选可开启并有状态提示",
+  ellipseActive.highlighted && ellipseActive.hint,
+  "高亮=" + ellipseActive.highlighted + " 提示=" + ellipseActive.hint
 );
-await clickByText("关闭");
+await clickByText("退出扣选");
 await sleep(400);
 
-// 左侧栏主入口
-const railMain = await page.evaluate(() => {
-  const target = Array.from(document.querySelectorAll("button")).find((element) =>
-    (element.innerText ?? "").trim() === "导入自定义对话框"
-  );
-  if (!target) {
+// 去背景工具在选中带图分镜时可见
+const backdropSample = await page.evaluate(() => {
+  const canvas = document.querySelector(".studio-workspace canvas");
+  if (!canvas) {
     return null;
   }
-  const box = target.getBoundingClientRect();
-  return { height: Math.round(box.height), width: Math.round(box.width), title: target.title };
+  const ctx = canvas.getContext("2d");
+  const corners = [
+    ctx.getImageData(3, 3, 1, 1).data,
+    ctx.getImageData(canvas.width - 4, canvas.height - 4, 1, 1).data
+  ];
+  return corners.every((pixel) => pixel[0] > 250 && pixel[1] > 250 && pixel[2] > 250);
 });
-record(
-  "左侧栏提供导入自定义对话框主入口",
-  Boolean(railMain) && railMain.width >= 90,
-  railMain ? railMain.width + "x" + railMain.height + " " + railMain.title.slice(0, 24) : "未找到"
-);
-
-// 删除能力已转到属性面板
-await clickByText("+ 圆角气泡");
-await sleep(700);
-const deleteInInspector = await page.evaluate(() => Boolean(document.querySelector("[data-delete-selection]")));
-record("选中对象后属性面板提供删除", deleteInInspector);
+record("底层仍是铺满编辑区的白色", backdropSample === true, "四角全白=" + backdropSample);
 
 record("运行期无控制台错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 

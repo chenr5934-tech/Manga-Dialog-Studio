@@ -125,7 +125,7 @@ const RED = [239, 68, 68];
 
 // 1) 入口
 const entry = await page.evaluate(() => {
-  const button = document.querySelector("[data-hero-sticker]");
+  const button = document.querySelector('[data-tool="stickers"]');
   if (!button) {
     return null;
   }
@@ -134,7 +134,7 @@ const entry = await page.evaluate(() => {
 });
 record("顶部主操作区提供贴纸入口", Boolean(entry) && entry.text === "贴纸", entry ? entry.text + " " + entry.width + "px" : "未找到");
 
-await page.click("[data-hero-sticker]");
+await page.click('[data-tool="stickers"]');
 await sleep(700);
 const pickerOpen = await page.evaluate(() => Boolean(document.querySelector('[data-sticker-picker="1"]')));
 record("贴纸面板可打开", pickerOpen);
@@ -158,7 +158,7 @@ await sleep(900);
 const addedCount = await page.evaluate(() => (document.querySelector("[data-sticker-count]")?.innerText ?? "").trim());
 record("点击后计数反馈", addedCount.includes("1"), addedCount);
 
-await page.click("[data-sticker-close]");
+// 贴纸已并入左侧工具栏，不再有需要关闭的弹窗
 await sleep(800);
 
 const heartShot = await page.evaluate(() => window.__composite());
@@ -343,11 +343,11 @@ for (const offset of [0, -5, 5, -10, 10]) {
 record("贴纸可以拖手柄旋转", rotated, rotationDetail);
 
 // 5) 连续添加会错位，不会完全重叠
-await page.click("[data-hero-sticker]");
+await page.click('[data-tool="stickers"]');
 await sleep(600);
 await page.click('[data-sticker-id="star"]');
 await sleep(700);
-await page.click("[data-sticker-close]");
+// 贴纸已并入左侧工具栏，不再有需要关闭的弹窗
 await sleep(700);
 const starBox = await page.evaluate(() => window.__colorBox(window.__composite(), [245, 158, 11]));
 record(

@@ -107,6 +107,16 @@ await page.goto(APP_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
 await page.waitForSelector('[data-preset-id="builtin:speech-right"]', { timeout: 30000 });
 await sleep(600);
 
+// 预设库入口降级到「更多」抽屉里，打开前先确认抽屉状态
+if (!(await page.$("[data-open-preset-library]"))) {
+  await page.evaluate(() => {
+    const button = Array.from(document.querySelectorAll("button")).find(
+      (element) => (element.innerText ?? "").trim() === "更多"
+    );
+    button?.click();
+  });
+  await sleep(600);
+}
 await page.click("[data-open-preset-library]");
 await sleep(1200);
 
@@ -139,6 +149,16 @@ const presetsAfter = await page.evaluate(() => document.querySelectorAll('[data-
 record("载入后预设进入列表", presetsAfter > presetsBefore, "自定义预设 " + presetsBefore + " → " + presetsAfter);
 
 // 保存：把当前预设写回文件夹
+// 预设库入口降级到「更多」抽屉里，打开前先确认抽屉状态
+if (!(await page.$("[data-open-preset-library]"))) {
+  await page.evaluate(() => {
+    const button = Array.from(document.querySelectorAll("button")).find(
+      (element) => (element.innerText ?? "").trim() === "更多"
+    );
+    button?.click();
+  });
+  await sleep(600);
+}
 await page.click("[data-open-preset-library]");
 await sleep(1000);
 await page.evaluate(() => {
@@ -181,20 +201,9 @@ await sleep(1500);
 const remaining = readdirSync(PRESET_DIR).filter((n) => n.startsWith("e2e-保存测试"));
 record("删除后磁盘文件消失", remaining.length === 0, "残留=" + remaining.length);
 
-// 左侧「保存预设」一键入口
+// 左侧「保存预设」一键入口已按需求移除，落盘统一走编辑器的「保存并存入预设库」
 await page.keyboard.press("Escape");
 await sleep(500);
-const quickSaveExists = await page.evaluate(() => Boolean(document.querySelector("[data-save-preset]")));
-record("左侧提供一键保存预设入口", quickSaveExists);
-
-promptAnswer = "e2e-一键保存";
-await page.click("[data-save-preset]");
-await sleep(1800);
-record(
-  "一键保存写入磁盘",
-  existsSync(join(PRESET_DIR, "e2e-一键保存.json")),
-  readdirSync(PRESET_DIR).filter((n) => n.startsWith("e2e-")).join(", ")
-);
 
 // 预设编辑器里的「保存并存入预设库」
 await page.evaluate(() => {
@@ -202,10 +211,9 @@ await page.evaluate(() => {
   button?.click();
 });
 await sleep(600);
-// 「新建预设」已并入左侧「导入自定义对话框」；改走 加气泡 → 编辑填字区 这条常用路径
+// 加一个气泡：点左侧预设卡片（顶部不再有加气泡按钮）
 await page.evaluate(() => {
-  const button = Array.from(document.querySelectorAll("button")).find((el) => el.innerText.trim() === "+ 圆角气泡");
-  button?.click();
+  document.querySelector('[data-preset-id="builtin:speech-right"]')?.click();
 });
 await sleep(700);
 await page.evaluate(() => {

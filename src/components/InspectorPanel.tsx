@@ -1048,6 +1048,7 @@ function PanelInspector({ panel }: { panel: Panel }) {
 
         <input
           ref={localImageInputRef}
+          data-panel-image-input="1"
           className="hidden"
           type="file"
           accept="image/*"
@@ -1075,9 +1076,9 @@ function PanelInspector({ panel }: { panel: Panel }) {
               data-open-bg-remover="1"
               disabled={isImageBusy}
               onClick={() => setBgRemoverOpen(true)}
-              title="去掉图片里与背景色接近的像素，适合把白底素材抠成透明"
+              title="一键去掉与背景色接近的像素，把白底素材抠成透明；窗口里可调容差与边缘羽化"
             >
-              去除背景
+              去除同色背景
             </button>
           ) : null}
         </div>

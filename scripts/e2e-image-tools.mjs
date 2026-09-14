@@ -71,7 +71,7 @@ const madeImage = await page.evaluate(async () => {
   ctx.fillRect(140, 100, 120, 100);
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
   const file = new File([blob], "solid-bg.png", { type: "image/png" });
-  const input = document.querySelector('input[type="file"][accept="image/*"]');
+  const input = document.querySelector("[data-panel-image-input]");
   if (!input) return "无文件输入";
   const transfer = new DataTransfer();
   transfer.items.add(file);

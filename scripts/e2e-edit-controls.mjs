@@ -79,7 +79,7 @@ const canvasBox = await (await page.$(".studio-workspace > div")).boundingBox();
 await page.mouse.click(canvasBox.x + 120, canvasBox.y + 120);
 await sleep(700);
 
-const fileInput = await page.$('input[type="file"][accept="image/*"]');
+const fileInput = await page.$("[data-panel-image-input]");
 await fileInput.uploadFile(imgPath);
 await sleep(3000);
 
@@ -170,7 +170,7 @@ await sleep(600);
 // ---------- 2) 多边形顶点拖拽 ----------
 await clickByText("分镜模式");
 await sleep(400);
-await clickByText("多边形扣选");
+await clickByText("多边形");
 await sleep(500);
 
 const polyBox = await (await page.$(".studio-workspace > div")).boundingBox();
@@ -220,7 +220,7 @@ await page.screenshot({ path: SHOT_DIR + "/polygon-vertex-drag.png" });
 
 // ---------- 3) 闭合提示 ----------
 // 上一步为编辑顶点已退出取景，这里重新开启多边形工具
-await clickByText("多边形扣选");
+await clickByText("多边形");
 await sleep(700);
 const polyBox3 = await (await page.$(".studio-workspace > div")).boundingBox();
 const hintBefore = await page.evaluate(() => document.body.innerText.includes("依次单击取点"));

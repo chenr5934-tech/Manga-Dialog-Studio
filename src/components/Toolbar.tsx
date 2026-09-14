@@ -9,9 +9,6 @@ const compactInputClass = "studio-input h-8 min-w-[180px] flex-1 px-3 text-sm fo
 const compactButtonClass = "studio-btn h-8 px-2.5 text-xs";
 const projectNameClass = "studio-input h-8 w-[190px] px-3 text-sm font-semibold";
 const primaryButtonClass = `${buttonClass} studio-btn-primary`;
-// 主操作按钮：比普通按钮更大更粗，让高频入口在第一眼里就跳出来
-const heroButtonClass = "studio-btn h-8 px-3.5 text-[13px] font-semibold";
-const heroPrimaryClass = `${heroButtonClass} studio-btn-primary`;
 const groupClass = "studio-subtle space-y-2 rounded-2xl p-3";
 const groupTitleClass = "text-[11px] uppercase tracking-[0.16em] text-[var(--text-secondary)]";
 
@@ -43,7 +40,6 @@ type ToolbarProps = {
 export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: ToolbarProps) {
   const project = useEditorStore((state) => state.project);
   const activePage = useEditorStore((state) => getActivePage(state.project));
-  const manualPanelMode = useEditorStore((state) => state.manualPanelMode);
   const snapSizeTo16 = useEditorStore((state) => state.snapSizeTo16);
   const themeMode = useEditorStore((state) => state.themeMode);
   const busy = useEditorStore((state) => state.busy);
@@ -60,20 +56,11 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
   const splitSelectedPanel = useEditorStore((state) => state.splitSelectedPanel);
   const addDefaultPanel = useEditorStore((state) => state.addDefaultPanel);
   const addOverlayImage = useEditorStore((state) => state.addOverlayImage);
-  const toggleManualPanelMode = useEditorStore((state) => state.toggleManualPanelMode);
   const toggleSnapSizeTo16 = useEditorStore((state) => state.toggleSnapSizeTo16);
   const setThemeMode = useEditorStore((state) => state.setThemeMode);
-  const addBubble = useEditorStore((state) => state.addBubble);
   const storyboardMode = useEditorStore((state) => state.storyboardMode);
   const setStoryboardMode = useEditorStore((state) => state.setStoryboardMode);
-  const polygonTool = useEditorStore((state) => state.polygonTool);
-  const togglePolygonTool = useEditorStore((state) => state.togglePolygonTool);
-  const setBackdropColor = useEditorStore((state) => state.setBackdropColor);
-  const openImportDialog = useEditorStore((state) => state.openImportDialog);
-  const openTemplateLibrary = useEditorStore((state) => state.openTemplateLibrary);
-  const openStickerPicker = useEditorStore((state) => state.openStickerPicker);
-  const sidePanel = useEditorStore((state) => state.sidePanel);
-  const setSidePanel = useEditorStore((state) => state.setSidePanel);
+  const openPresetLibrary = useEditorStore((state) => state.openPresetLibrary);
   const saveProject = useEditorStore((state) => state.saveProject);
   const saveProjectAs = useEditorStore((state) => state.saveProjectAs);
   const loadProject = useEditorStore((state) => state.loadProject);
@@ -164,54 +151,6 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
           </button>
         </div>
 
-        <span className="mx-0.5 hidden h-5 w-px bg-[var(--line-soft)] sm:block" />
-
-        <button
-          type="button"
-          data-hero-import="1"
-          className={heroPrimaryClass}
-          onClick={() => openImportDialog()}
-          title="按顺序多选导入漫画原稿图片，每张图片成为一个页面"
-        >
-          导入图片
-        </button>
-        <button
-          type="button"
-          data-hero-sticker="1"
-          className={heroButtonClass}
-          onClick={() => openStickerPicker()}
-          title="打开贴纸面板，单击即可把爱心、星星等贴纸加到画面"
-        >
-          贴纸
-        </button>
-        <button
-          type="button"
-          data-open-template-library="1"
-          className={heroButtonClass}
-          onClick={() => openTemplateLibrary()}
-          title="整册版式模板：保存当前排版，或从模板新建后只替换画面"
-        >
-          模板
-        </button>
-        <button
-          type="button"
-          data-hero-export="1"
-          className={`${heroButtonClass} ${activeCategory === "export" ? "studio-btn-primary" : ""}`}
-          onClick={() => toggleCategory("export")}
-          title="导出 PNG / PDF / 图片 ZIP"
-        >
-          导出
-        </button>
-        <button
-          type="button"
-          data-agent-toggle="1"
-          className={`${heroButtonClass} ${sidePanel === "agent" ? "studio-btn-primary" : ""}`}
-          onClick={() => setSidePanel(sidePanel === "agent" ? "inspector" : "agent")}
-          title="Agent 模式：用一句话描述想要的排版，自动生成分镜与气泡"
-        >
-          Agent 模式
-        </button>
-
         <div className="ml-auto flex items-center gap-1.5">
           <button className={compactButtonClass} disabled={historyPastCount === 0} onClick={() => undo()}>
             撤销
@@ -242,43 +181,6 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <div className="studio-subtle flex flex-wrap items-center gap-1.5 rounded-2xl px-2 py-1.5">
-          {storyboardMode === "storyboard" ? (
-            <>
-              <button
-                type="button"
-                className={`studio-btn h-7 px-2.5 text-xs ${manualPanelMode ? "studio-btn-primary" : ""}`}
-                onClick={() => toggleManualPanelMode()}
-                title="在画布上拖拽扣出矩形分镜"
-              >
-                矩形扣选
-              </button>
-              <button
-                type="button"
-                className={`studio-btn h-7 px-2.5 text-xs ${polygonTool ? "studio-btn-primary" : ""}`}
-                onClick={() => togglePolygonTool()}
-                title="单击加点，回到起点或按 Enter 闭合"
-              >
-                多边形扣选
-              </button>
-              <label className="studio-btn flex h-7 cursor-pointer items-center gap-1.5 px-2 text-xs">
-                <span>底图色</span>
-                <input
-                  type="color"
-                  className="h-4 w-6 cursor-pointer border-0 bg-transparent p-0"
-                  value={activePage.backdropColor ?? "#f4f5f7"}
-                  onChange={(event) => setBackdropColor(event.target.value)}
-                  title="分镜模式的底图颜色"
-                />
-              </label>
-            </>
-          ) : (
-            <button type="button" className="studio-btn h-7 px-2.5 text-xs" onClick={() => addBubble("rounded")}>
-              + 圆角气泡
-            </button>
-          )}
-        </div>
-
         <div className="flex flex-wrap items-center gap-1.5">
           {drawerCategories.map((category) => (
             <button
@@ -583,6 +485,16 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                     }}
                   >
                     {busy.loadingProject ? "加载中..." : "加载项目"}
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    className={buttonClass}
+                    data-open-preset-library="1"
+                    onClick={() => openPresetLibrary()}
+                    title="浏览项目目录 presets/ 里已保存的整套对话框预设，可载入或删除"
+                  >
+                    预设库
                   </button>
                 </div>
                 <p className="text-xs leading-5 text-[var(--text-secondary)]">

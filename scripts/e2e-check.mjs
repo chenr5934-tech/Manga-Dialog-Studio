@@ -127,11 +127,11 @@ await shot("v2-04-theme-light");
 // 4) 分镜模式：多边形扣选
 await clickByText("分镜模式");
 await sleep(400);
-const polygonBtnOk = await clickByText("多边形扣选");
+const polygonBtnOk = await clickByText("多边形");
 await sleep(400);
 const polygonActive = await page.evaluate(() =>
   Array.from(document.querySelectorAll("button")).some(
-    (button) => button.innerText.trim() === "多边形扣选" && button.className.includes("studio-btn-primary")
+    (button) => button.innerText.trim() === "多边形" && button.className.includes("studio-btn-primary")
   )
 );
 record("多边形扣选可开启", polygonBtnOk && polygonActive, "点击=" + polygonBtnOk + " 高亮=" + polygonActive);
@@ -177,9 +177,10 @@ await shot("v2-07-backdrop");
 // 6) 预设编辑器
 await clickByText("对话编辑");
 await sleep(400);
-// 「新建预设」入口已并入左侧的「导入自定义对话框」；这里验证更常用的路径：加气泡 → 编辑填字区
-await clickByText("+ 圆角气泡");
-await sleep(600);
+// 顶部不再放加气泡按钮，改点左侧预设卡片（这也是最常用的路径）
+const editorSeedCard = await page.$('[data-preset-id="builtin:speech-right"]');
+await clickPresetCard(editorSeedCard);
+await sleep(700);
 const editBtnOk = await clickByText("编辑填字区");
 await sleep(800);
 const stageOpen = await page.$("[data-preset-stage]");
@@ -221,7 +222,7 @@ await sleep(600);
 const panelSelected = await page.evaluate(() => document.body.innerText.includes("多边形分镜"));
 record("选中多边形分镜显示专属面板", panelSelected);
 
-const fileInput = await page.$('input[type="file"][accept="image/*"]');
+const fileInput = await page.$("[data-panel-image-input]");
 if (fileInput) {
   await fileInput.uploadFile("D:/dsh工作区/_shots/v2-01-initial.png");
   await sleep(3500);
@@ -243,7 +244,7 @@ await assetPage.setContent('<!doctype html><body style="margin:0;background:#0b1
 await assetPage.screenshot({ path: SHOT_DIR + "/test-dark.png" });
 await assetPage.close();
 
-const importInput = await page.$('input[type="file"][multiple]');
+const importInput = await page.$("[data-import-images-input]");
 await importInput.uploadFile(
   "D:/dsh工作区/_shots/v2-01-initial.png",
   "D:/dsh工作区/_shots/v2-06-polygon-created.png",
