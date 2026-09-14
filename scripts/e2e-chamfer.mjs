@@ -239,29 +239,65 @@ record(
 const polyCorner = await page.evaluate(() => Boolean(document.querySelector('[data-corner-mode="chamfer"]')));
 record("多边形分镜同样提供圆角/倒角切换", polyCorner);
 
-await page.click('[data-corner-mode="chamfer"]');
-await sleep(700);
-await setPanelNumber("Radius", 120);
-await sleep(900);
-const polyStillThere = await page.evaluate(() => {
-  const canvases = Array.from(document.querySelectorAll(".studio-workspace canvas"));
-  const off = document.createElement("canvas");
-  off.width = canvases[0].width;
-  off.height = canvases[0].height;
-  const ctx = off.getContext("2d");
-  for (const item of canvases) {
-    ctx.drawImage(item, 0, 0, off.width, off.height);
-  }
-  const data = ctx.getImageData(0, 0, off.width, off.height).data;
-  let white = 0;
-  for (let index = 0; index < data.length; index += 4) {
-    if (data[index] > 235 && data[index + 1] > 235 && data[index + 2] > 235 && data[index + 3] > 200) {
-      white += 1;
+// 多边形倒角：直接比对"圆角 vs 倒角"的画布差异，而不是只数白色像素。
+// 分镜填充是白的、页面底色也可能白，所以差异只会出现在边框线上，判据要看差异像素数。
+await page.evaluate(() => {
+  window.__snapshotCanvas = () => {
+    const canvases = Array.from(document.querySelectorAll(".studio-workspace canvas"));
+    const off = document.createElement("canvas");
+    off.width = canvases[0].width;
+    off.height = canvases[0].height;
+    const ctx = off.getContext("2d");
+    for (const item of canvases) {
+      ctx.drawImage(item, 0, 0, off.width, off.height);
     }
-  }
-  return white;
+    return Array.from(ctx.getImageData(0, 0, off.width, off.height).data);
+  };
+  window.__countDiff = (a, b) => {
+    let count = 0;
+    for (let index = 0; index < a.length; index += 4) {
+      const delta =
+        Math.abs(a[index] - b[index]) +
+        Math.abs(a[index + 1] - b[index + 1]) +
+        Math.abs(a[index + 2] - b[index + 2]);
+      if (delta > 40) {
+        count += 1;
+      }
+    }
+    return count;
+  };
 });
-record("多边形倒角后仍正常渲染", polyStillThere > 3000, "白色像素=" + polyStillThere);
+
+await setPanelNumber("Radius", 320);
+await sleep(600);
+await page.click('[data-corner-mode="round"]');
+await sleep(900);
+const polyRound = await page.evaluate(() => window.__snapshotCanvas());
+
+await page.click('[data-corner-mode="chamfer"]');
+await sleep(900);
+const polyChamfer = await page.evaluate(() => window.__snapshotCanvas());
+
+const polyDiff = await page.evaluate((a, b) => window.__countDiff(a, b), polyRound, polyChamfer);
+record(
+  "多边形同样受倒角影响（圆角与倒角的画布输出不同）",
+  polyDiff > 500,
+  "差异像素=" + polyDiff
+);
+
+// 与 Radius=0 的直角对比：倒角应当改变角部
+await setPanelNumber("Radius", 0);
+await sleep(800);
+const polySharp = await page.evaluate(() => window.__snapshotCanvas());
+await setPanelNumber("Radius", 320);
+await sleep(900);
+const polyChamferBig = await page.evaluate(() => window.__snapshotCanvas());
+const polyVsSharp = await page.evaluate((a, b) => window.__countDiff(a, b), polySharp, polyChamferBig);
+record(
+  "多边形倒角相对直角确实改变了角部",
+  polyVsSharp > 500,
+  "差异像素=" + polyVsSharp
+);
 
 // ---------- 内边距（Padding）必须肉眼可见 ----------
 // 早先填充是铺满边框内沿的，调 Padding 只有图片会动，没图片时完全看不出，
