@@ -263,6 +263,91 @@ const polyStillThere = await page.evaluate(() => {
 });
 record("多边形倒角后仍正常渲染", polyStillThere > 3000, "白色像素=" + polyStillThere);
 
+// ---------- 内边距（Padding）必须肉眼可见 ----------
+// 早先填充是铺满边框内沿的，调 Padding 只有图片会动，没图片时完全看不出，
+// 现在填充也按 Padding 内缩，边框与内容之间会露出一圈底色。
+await page.evaluate(() => {
+  window.__segments = () => {
+    const canvasEl = document.querySelector(".studio-workspace canvas");
+    const match = document.body.innerText.match(/Canvas\s+(\d+)\s*x\s*(\d+)/);
+    const zoom = canvasEl.width / Number(match[1]);
+    const startX = Math.round(40 * zoom);
+    const startY = Math.round(40 * zoom);
+    const canvases = Array.from(document.querySelectorAll(".studio-workspace canvas"));
+    const off = document.createElement("canvas");
+    off.width = canvases[0].width;
+    off.height = canvases[0].height;
+    const ctx = off.getContext("2d");
+    for (const item of canvases) {
+      ctx.drawImage(item, 0, 0, off.width, off.height);
+    }
+    const data = ctx.getImageData(0, 0, off.width, off.height).data;
+    const kind = (index) => {
+      const r = data[index];
+      const g = data[index + 1];
+      const b = data[index + 2];
+      if (r > 240 && g > 240 && b > 240) return "白";
+      if (r < 90 && g > 130 && b < 110) return "绿";
+      if (r < 80 && g < 80 && b < 90) return "黑";
+      return "其他";
+    };
+    const list = [];
+    let current = null;
+    for (let step = 0; step < 90; step += 1) {
+      const index = ((startY + step) * off.width + (startX + step)) * 4;
+      const k = kind(index);
+      if (!current || current.kind !== k) {
+        current = { kind: k };
+        list.push(current);
+      }
+    }
+    return list.map((item) => item.kind).join(",");
+  };
+});
+
+// 前面新建的多边形现在是选中状态，而扫描的是左上角那个矩形分镜，
+// 先把选中切回矩形，否则改的是多边形的 Padding。
+const rectBox = await (await page.$(".studio-workspace > div")).boundingBox();
+await page.mouse.click(rectBox.x + 60, rectBox.y + 60);
+await sleep(800);
+const selectedIsRect = await page.evaluate(() => {
+  const values = {};
+  for (const label of document.querySelectorAll("aside label")) {
+    const span = label.querySelector("span");
+    const input = label.querySelector("input");
+    if (span && input) {
+      values[span.innerText.trim().toLowerCase()] = input.value;
+    }
+  }
+  return values["x"] === "40" && values["width"] === "2400";
+});
+record("可以重新选中矩形分镜", selectedIsRect);
+await setPanelNumber("Radius", 120);
+await sleep(500);
+await page.click('[data-corner-mode="chamfer"]');
+await sleep(700);
+
+// 先清掉内边距，取一个"边框之后直接是填充"的基线
+await setPanelNumber("Padding", 0);
+await sleep(800);
+const withoutPadding = await page.evaluate(() => window.__segments());
+const greenRuns = (value) => value.split(",").filter((part) => part === "绿").length;
+record(
+  "内边距为 0 时，角上只有背景这一段底色",
+  greenRuns(withoutPadding) === 1,
+  withoutPadding
+);
+
+await setPanelNumber("Padding", 70);
+await sleep(900);
+const withPadding = await page.evaluate(() => window.__segments());
+record(
+  "内边距大于 0 时，边框与内容之间多露出一圈底色",
+  greenRuns(withPadding) === greenRuns(withoutPadding) + 1,
+  withoutPadding + "   →   " + withPadding
+);
+await page.screenshot({ path: SHOT_DIR + "/padding-visible.png" });
+
 record("运行期无控制台错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 
 await browser.close();

@@ -973,7 +973,10 @@ function PanelInspector({ panel }: { panel: Panel }) {
             </button>
           </div>
         </div>
-        <NumberField label="Gap" value={panel.gap} min={0} onChange={patch("gap") as (v: number) => void} />
+        <NumberField label="Padding" value={panel.gap} min={0} onChange={patch("gap") as (v: number) => void} />
+        <p className="text-[11px] leading-4 text-[var(--text-secondary)]">
+          内边距：边框与画面内容之间留出的空隙，会露出页面底色。注意它和「切割画布」里分镜之间的间距不是一回事。
+        </p>
 
         <div className="space-y-2">
           <div className="flex flex-wrap gap-2">

@@ -137,7 +137,8 @@ function PanelFillShape({ panel }: { panel: Panel }) {
       // Even transparent panels need a fill so Konva can build a hit area for selection and dragging.
       sceneFunc={(context, shape) => {
         context.beginPath();
-        drawPanelPath(context, panel);
+        // 填充同样按 gap 内缩：边框与内容之间留出一圈底色，内边距才有肉眼可见的效果
+        drawPanelPath(context, panel, panel.gap);
         context.closePath();
         context.fillStrokeShape(shape);
       }}

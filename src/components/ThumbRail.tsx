@@ -26,7 +26,7 @@ function PreviewPanelFill({ panel }: { panel: Panel }) {
     <Shape
       sceneFunc={(context, shape) => {
         context.beginPath();
-        drawPanelPath(context, panel);
+        drawPanelPath(context, panel, panel.gap);
         context.closePath();
         context.fillStrokeShape(shape);
       }}
