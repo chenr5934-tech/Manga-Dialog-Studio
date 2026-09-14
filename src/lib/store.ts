@@ -128,6 +128,8 @@ type EditorStore = {
     chamferRadius?: number;
     cornerMode?: "round" | "chamfer";
     borderWidth?: number;
+    borderColor?: string;
+    gap?: number;
   }) => void;
 
   setActivePage: (id: string) => void;
@@ -2147,7 +2149,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             borderRadius: style.borderRadius === undefined ? panel.borderRadius : style.borderRadius,
             chamferRadius: style.chamferRadius === undefined ? panel.chamferRadius : style.chamferRadius,
             cornerMode: style.cornerMode === undefined ? panel.cornerMode : style.cornerMode,
-            borderWidth: style.borderWidth === undefined ? panel.borderWidth : style.borderWidth
+            borderWidth: style.borderWidth === undefined ? panel.borderWidth : style.borderWidth,
+            borderColor: style.borderColor === undefined ? panel.borderColor : style.borderColor,
+            gap: style.gap === undefined ? panel.gap : style.gap
           })
         )
       }));

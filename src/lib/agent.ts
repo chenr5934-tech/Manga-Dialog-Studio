@@ -11,7 +11,15 @@ export type AgentAction =
   | { type: "addEllipsePanel"; x?: number; y?: number; width?: number; height?: number }
   | { type: "addPolygonPanel"; points: { x: number; y: number }[] }
   | { type: "setBackdropColor"; color: string }
-  | { type: "setPanelStyle"; borderRadius?: number; borderWidth?: number; borderColor?: string; gap?: number }
+  | {
+      type: "setPanelStyle";
+      borderRadius?: number;
+      chamferRadius?: number;
+      cornerMode?: "round" | "chamfer";
+      borderWidth?: number;
+      borderColor?: string;
+      gap?: number;
+    }
   | {
       type: "addBubble";
       x?: number;
@@ -385,12 +393,31 @@ export function applyAgentPlan(plan: AgentPlan): ApplyResult {
         }
 
         case "setPanelStyle": {
-          const style: { borderRadius?: number; borderWidth?: number } = {};
+          const style: {
+            borderRadius?: number;
+            chamferRadius?: number;
+            cornerMode?: "round" | "chamfer";
+            borderWidth?: number;
+            borderColor?: string;
+            gap?: number;
+          } = {};
           if (Number.isFinite(Number(action.borderRadius))) {
             style.borderRadius = Math.max(0, Number(action.borderRadius));
           }
+          if (Number.isFinite(Number(action.chamferRadius))) {
+            style.chamferRadius = Math.max(0, Number(action.chamferRadius));
+          }
+          if (action.cornerMode === "round" || action.cornerMode === "chamfer") {
+            style.cornerMode = action.cornerMode;
+          }
           if (Number.isFinite(Number(action.borderWidth))) {
             style.borderWidth = Math.max(0, Number(action.borderWidth));
+          }
+          if (HEX_COLOR.test(String(action.borderColor ?? ""))) {
+            style.borderColor = String(action.borderColor);
+          }
+          if (Number.isFinite(Number(action.gap))) {
+            style.gap = Math.max(0, Number(action.gap));
           }
           store.setAllPanelsStyle(style);
           applied.push("更新分镜样式");
