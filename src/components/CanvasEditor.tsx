@@ -97,6 +97,88 @@ function waitForStageRefresh(): Promise<void> {
   });
 }
 
+// 等画布上所有图片节点真正拿到已解码的图片再截图。
+// 只等两帧是不够的：切页之后 useImage 还在异步解码，大图往往要几百毫秒，
+// 隔一页就会截到没有画面的空白页——批量导出时表现为"隔一张缺一张图"。
+async function waitForImagesReady(stage: Konva.Stage, timeoutMs = 6000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  // 切页之后 React 重渲染和 Konva 绘制都需要时间，先给一个下限，避免第一轮就误判"没有图片"。
+  const minimumWaitUntil = Date.now() + 220;
+  let stableRounds = 0;
+
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    const nodes = stage.find("Image");
+
+    // 真的没有图片的页面（比如空白页），过了下限就放行，不必等满超时
+    if (nodes.length === 0) {
+      if (Date.now() >= minimumWaitUntil) {
+        return;
+      }
+      continue;
+    }
+    const allReady = nodes.every((node) => {
+      // find("Image") 拿到的是基类 Node，取图片要按 Konva.Image 收窄
+      const image = (node as Konva.Image).image?.() as HTMLImageElement | undefined;
+      if (!image) {
+        return true;
+      }
+      return image.complete !== false && (image.naturalWidth ?? 0) > 0;
+    });
+
+    // 要连续几轮都就绪才算稳，避免刚好卡在"旧页节点已就绪、新页还没挂上"的空窗期
+    if (allReady && Date.now() >= minimumWaitUntil) {
+      stableRounds += 1;
+      if (stableRounds >= 3) {
+        return;
+      }
+    } else {
+      stableRounds = 0;
+    }
+  }
+}
+
+// 预解码：先把项目里用到的图片塞进浏览器缓存，切页时 useImage 能立刻命中
+async function preloadProjectImages(urls: string[]): Promise<void> {
+  const unique = Array.from(new Set(urls.filter((url) => typeof url === "string" && url.length > 0)));
+  await Promise.all(
+    unique.map(
+      (url) =>
+        new Promise<void>((resolve) => {
+          const probe = new Image();
+          probe.onload = () => resolve();
+          probe.onerror = () => resolve();
+          probe.src = url;
+        })
+    )
+  );
+}
+
+// 收集一页里所有会用到的图片引用
+function collectPageImageUrls(page: ProjectPage): string[] {
+  const urls: string[] = [];
+  if (page.background?.original) {
+    urls.push(page.background.original);
+  }
+  for (const panel of page.panels) {
+    if (panel.image?.original) {
+      urls.push(panel.image.original);
+    }
+  }
+  for (const overlay of page.overlays ?? []) {
+    if (overlay.image) {
+      urls.push(overlay.image);
+    }
+  }
+  for (const bubble of page.bubbles) {
+    if (bubble.image) {
+      urls.push(bubble.image);
+    }
+  }
+  return urls;
+}
+
 const SKEW_HANDLE_RADIUS = 15;
 const SKEW_HANDLE_HIT_RADIUS = 30;
 const SKEW_HANDLE_HIT_STROKE_WIDTH = 42;
@@ -658,6 +740,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
 
     setIsExporting(true);
     await waitForStageRefresh();
+    // 关键：等画面真正画完再截。只等两个 rAF 是不可靠的——切页后 React 重渲染、
+    // 图片解码都还在路上，大页面会截到没有画面的空白页。
+    await waitForImagesReady(stage);
 
     const prevWidth = stage.width();
     const prevHeight = stage.height();
@@ -717,6 +802,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
         const originalPageId = project.activePageId;
 
         try {
+          // 先把整册用到的图片解码好，切页时才不会出现"图片还没上来就截图"
+          setNotice("正在准备图片...");
+          await preloadProjectImages(project.pages.flatMap((item) => collectPageImageUrls(item)));
           const filename = formatFilename(project.name, "pdf");
           const { jsPDF } = await import("jspdf");
 
@@ -771,6 +859,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
         try {
           const { default: JSZip } = await import("jszip");
           const zip = new JSZip();
+
+          setNotice("正在准备图片...");
+          await preloadProjectImages(project.pages.flatMap((item) => collectPageImageUrls(item)));
 
           for (let index = 0; index < project.pages.length; index += 1) {
             const page = project.pages[index];

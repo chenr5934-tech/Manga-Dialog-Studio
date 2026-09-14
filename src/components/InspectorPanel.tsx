@@ -972,6 +972,10 @@ function PanelInspector({ panel }: { panel: Panel }) {
               倒角
             </button>
           </div>
+          <p className="text-[11px] leading-4 text-[var(--text-secondary)]">
+            半径会被相邻边长限制：顶点越密、边越短，实际能用上的圆角/倒角就越小。
+            另外填充色和页面底色相同时，只看得到边框的角在变，给分镜放张图或换个底图色会更清楚。
+          </p>
         </div>
         <NumberField label="Padding" value={panel.gap} min={0} onChange={patch("gap") as (v: number) => void} />
         <p className="text-[11px] leading-4 text-[var(--text-secondary)]">

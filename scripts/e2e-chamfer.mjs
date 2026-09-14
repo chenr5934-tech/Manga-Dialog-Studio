@@ -1,5 +1,6 @@
 import puppeteer from "puppeteer-core";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:8737/";
@@ -23,6 +24,24 @@ const page = await browser.newPage();
 const errors = [];
 page.on("pageerror", (error) => errors.push(error.message));
 page.on("dialog", (dialog) => void dialog.accept());
+
+// 给多边形圆角测试准备一张大尺寸素材：有画面内容时，圆角才会在像素上留下明显痕迹
+const assetPage = await browser.newPage();
+await assetPage.setContent('<!doctype html><body style="margin:0"><canvas id="p"></canvas></body>');
+const polySourceData = await assetPage.evaluate(() => {
+  const canvas = document.getElementById("p");
+  canvas.width = 1600;
+  canvas.height = 1600;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#0ea5e9";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/png");
+});
+await assetPage.close();
+writeFileSync(
+  join(SHOT_DIR, "chamfer-poly-source.png"),
+  Buffer.from(polySourceData.slice(polySourceData.indexOf(",") + 1), "base64")
+);
 
 await page.goto(APP_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
 await page.waitForSelector('[data-preset-id="builtin:speech-right"]', { timeout: 30000 });
@@ -283,6 +302,26 @@ record(
   "多边形同样受倒角影响（圆角与倒角的画布输出不同）",
   polyDiff > 500,
   "差异像素=" + polyDiff
+);
+
+// 圆角对多边形的实际效力：给多边形放一张图，"白填充变白背景"的干扰就没了，
+// 边角的弧线会实打实改变画面。没有图时同样的半径只有两千多像素的差异。
+const polyImageInput = await page.$("[data-panel-image-input]");
+if (polyImageInput) {
+  await polyImageInput.uploadFile(join(SHOT_DIR, "chamfer-poly-source.png"));
+  await sleep(2500);
+}
+await setPanelNumber("Radius", 0);
+await sleep(800);
+const polySharpShot = await page.evaluate(() => window.__snapshotCanvas());
+await setPanelNumber("Radius", 400);
+await sleep(900);
+const polyRoundShot = await page.evaluate(() => window.__snapshotCanvas());
+const polyRoundDiff = await page.evaluate((a, b) => window.__countDiff(a, b), polySharpShot, polyRoundShot);
+record(
+  "多边形的圆角在画面内容上确实生效",
+  polyRoundDiff > 5000,
+  "差异像素=" + polyRoundDiff
 );
 
 // 与 Radius=0 的直角对比：倒角应当改变角部
