@@ -84,6 +84,9 @@ type EditorStore = {
   templateLibraryOpen: boolean;
   // 右侧栏显示属性检查器还是 Agent 面板
   sidePanel: "inspector" | "agent";
+  // Agent 的作用范围：限定后 agent 只能在这个矩形内新增内容
+  agentScope: { x: number; y: number; width: number; height: number } | null;
+  agentScopePicking: boolean;
   recentTextColors: string[];
   selection?: Selection;
   manualPanelMode: boolean;
@@ -133,6 +136,8 @@ type EditorStore = {
   addBubble: (type: BubbleType) => void;
 
   setSidePanel: (panel: "inspector" | "agent") => void;
+  setAgentScope: (scope: { x: number; y: number; width: number; height: number } | null) => void;
+  toggleAgentScopePicking: (enabled?: boolean) => void;
   setStoryboardMode: (mode: StoryboardMode) => void;
   openPresetEditor: (options?: { bubbleId?: string; seed?: BubblePreset }) => void;
   closePresetEditor: () => void;
@@ -1860,6 +1865,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   presetLibraryOpen: false,
   templateLibraryOpen: false,
   sidePanel: "inspector",
+  agentScope: null,
+  agentScopePicking: false,
   recentTextColors: getInitialRecentTextColors(),
   selection: undefined,
   manualPanelMode: false,
@@ -2723,6 +2730,30 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set(() => ({
       sidePanel: panel
     }));
+  },
+
+  setAgentScope: (scope) => {
+    set((state) => ({
+      agentScope: scope,
+      agentScopePicking: false,
+      ...withNotice(
+        state,
+        scope
+          ? `Agent 范围已设定：${Math.round(scope.width)} × ${Math.round(scope.height)}`
+          : "已取消 Agent 范围限制"
+      )
+    }));
+  },
+
+  toggleAgentScopePicking: (enabled) => {
+    set((state) => {
+      const nextEnabled = enabled ?? !state.agentScopePicking;
+      return {
+        agentScopePicking: nextEnabled,
+        sidePanel: nextEnabled ? "agent" : state.sidePanel,
+        ...(nextEnabled ? withNotice(state, "在画布上拖拽框出 Agent 的作用范围") : {})
+      };
+    });
   },
 
   setStoryboardMode: (mode) => {

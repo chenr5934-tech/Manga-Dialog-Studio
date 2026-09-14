@@ -513,6 +513,10 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
   const addBubbleFromPreset = useEditorStore((state) => state.addBubbleFromPreset);
   const toggleManualPanelMode = useEditorStore((state) => state.toggleManualPanelMode);
   const togglePolygonTool = useEditorStore((state) => state.togglePolygonTool);
+  const agentScope = useEditorStore((state) => state.agentScope);
+  const agentScopePicking = useEditorStore((state) => state.agentScopePicking);
+  const setAgentScope = useEditorStore((state) => state.setAgentScope);
+  const toggleAgentScopePicking = useEditorStore((state) => state.toggleAgentScopePicking);
   const createPolygonPanelFromPoints = useEditorStore((state) => state.createPolygonPanelFromPoints);
   const polygonTool = useEditorStore((state) => state.polygonTool);
 
@@ -529,7 +533,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
 
   // 扣选期间画布进入锁定态：已有分镜与气泡不响应事件、不可拖动，
   // 用户在任何位置按下都只会继续扣选，不会误拖底下的内容
-  const pickingMode = manualPanelMode || polygonTool;
+  const pickingMode = manualPanelMode || polygonTool || agentScopePicking;
 
   const selectedNodeId = useMemo(() => {
     if (!selection) {
@@ -899,6 +903,16 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
       return;
     }
 
+    // 框定 Agent 作用范围：与扣选一样从拖动开始，但落点用于设置范围
+    if (agentScopePicking) {
+      const pointer = stage.getPointerPosition();
+      if (!pointer) {
+        return;
+      }
+      beginManualPanel(pointer);
+      return;
+    }
+
     // 扣选优先于一切元素交互：即使按在已有分镜或气泡上，也从扣选开始
     if (manualPanelMode) {
       const pointer = stage.getPointerPosition();
@@ -964,7 +978,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
   // 松手时指针很可能已经移出画布（尤其是往边缘拖），若只监听 Stage 会丢掉这次取景。
   // 因此改在 window 上监听，并用容器矩形自行换算场景坐标。
   useEffect(() => {
-    if (!manualPanelMode) {
+    if (!manualPanelMode && !agentScopePicking) {
       return;
     }
 
@@ -997,12 +1011,22 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
         return;
       }
 
+      if (useEditorStore.getState().agentScopePicking) {
+        setAgentScope({
+          x: Math.min(start.x, end.x),
+          y: Math.min(start.y, end.y),
+          width: Math.abs(width),
+          height: Math.abs(height)
+        });
+        return;
+      }
+
       createPanelFromRect(start.x, start.y, width, height);
     };
 
     window.addEventListener("mouseup", onWindowMouseUp);
     return () => window.removeEventListener("mouseup", onWindowMouseUp);
-  }, [createPanelFromRect, manualPanelMode, zoom]);
+  }, [agentScopePicking, createPanelFromRect, manualPanelMode, setAgentScope, zoom]);
 
   const adjustZoom = (delta: number) => {
     setZoom((current) => clampZoom(current + delta));
@@ -1047,25 +1071,29 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
         <div className="shrink-0 border-b border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1.5">
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-primary)]">
             <span className="studio-chip px-2 py-0.5 font-semibold">
-              {manualPanelMode ? "矩形扣选中" : "多边形扣选中"}
+              {agentScopePicking ? "框定 Agent 范围" : manualPanelMode ? "矩形扣选中" : "多边形扣选中"}
             </span>
             <span className="text-[var(--text-secondary)]">
-              {manualPanelMode
-                ? "画布已锁定，拖拽即可取景；已有分镜与气泡不会被拖动"
-                : "画布已锁定，单击逐个取点；回到起点、按 Enter 或点画布下方的「完成闭合」都能收口"}
+              {agentScopePicking
+                ? "在画布上拖拽框出一块区域，Agent 之后只会在该区域内新增内容"
+                : manualPanelMode
+                  ? "画布已锁定，拖拽即可取景；已有分镜与气泡不会被拖动"
+                  : "画布已锁定，单击逐个取点；回到起点、按 Enter 或点画布下方的「完成闭合」都能收口"}
             </span>
             <button
               type="button"
               className="studio-btn ml-auto h-6 px-2 text-[11px]"
               onClick={() => {
-                if (manualPanelMode) {
+                if (agentScopePicking) {
+                  toggleAgentScopePicking(false);
+                } else if (manualPanelMode) {
                   toggleManualPanelMode(false);
                 } else {
                   togglePolygonTool(false);
                 }
               }}
             >
-              退出扣选
+              {agentScopePicking ? "取消框定" : "退出扣选"}
             </button>
           </div>
         </div>
@@ -1313,6 +1341,31 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                   </Group>
                 );
               })}
+
+              {agentScope && !isExporting && (
+                <Group listening={false}>
+                  <Rect
+                    x={agentScope.x}
+                    y={agentScope.y}
+                    width={agentScope.width}
+                    height={agentScope.height}
+                    fill="rgba(245, 158, 11, 0.07)"
+                    stroke="#f59e0b"
+                    strokeWidth={3 / Math.max(0.01, zoom)}
+                    dash={[14 / Math.max(0.01, zoom), 8 / Math.max(0.01, zoom)]}
+                    listening={false}
+                  />
+                  <Text
+                    x={agentScope.x}
+                    y={Math.max(0, agentScope.y - 28 / Math.max(0.01, zoom))}
+                    text="Agent 作用范围"
+                    fontSize={22 / Math.max(0.01, zoom)}
+                    fontFamily="Noto Sans SC"
+                    fill="#b45309"
+                    listening={false}
+                  />
+                </Group>
+              )}
 
               {polygonTool && polygonPoints.length > 0 && (
                 <>

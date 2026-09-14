@@ -13,14 +13,25 @@ type ProviderPreset = {
   id: string;
   label: string;
   baseUrl: string;
-  model: string;
+  models: string[];
+  defaultModel: string;
+  effortParam: string | null;
 };
+
+const EFFORT_OPTIONS: { value: string; label: string; hint: string }[] = [
+  { value: "auto", label: "默认", hint: "不发送档位参数，用厂商自己的默认行为" },
+  { value: "off", label: "关闭", hint: "最省 token，响应最快" },
+  { value: "low", label: "低", hint: "少量思考" },
+  { value: "high", label: "高", hint: "充分思考" },
+  { value: "max", label: "最高", hint: "最大思考预算，最慢也最贵" }
+];
 
 type AgentConfig = {
   provider: string;
   baseUrl: string;
   model: string;
   temperature: number;
+  effort: string;
   hasApiKey: boolean;
   apiKeyHint: string;
   providers: ProviderPreset[];
@@ -47,9 +58,13 @@ const fieldClass = "studio-input h-8 w-full px-2 text-xs";
 export default function AgentPanel() {
   const setNotice = useEditorStore((state) => state.setNotice);
   const setSidePanel = useEditorStore((state) => state.setSidePanel);
+  const agentScope = useEditorStore((state) => state.agentScope);
+  const agentScopePicking = useEditorStore((state) => state.agentScopePicking);
+  const toggleAgentScopePicking = useEditorStore((state) => state.toggleAgentScopePicking);
+  const setAgentScope = useEditorStore((state) => state.setAgentScope);
 
   const [config, setConfig] = useState<AgentConfig | null>(null);
-  const [draft, setDraft] = useState({ provider: "", baseUrl: "", model: "", apiKey: "" });
+  const [draft, setDraft] = useState({ provider: "", baseUrl: "", model: "", apiKey: "", effort: "auto" });
   const [configOpen, setConfigOpen] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -64,7 +79,8 @@ export default function AgentPanel() {
         provider: payload.provider,
         baseUrl: payload.baseUrl,
         model: payload.model,
-        apiKey: ""
+        apiKey: "",
+        effort: payload.effort ?? "auto"
       });
     } catch {
       setNotice("读取 Agent 配置失败");
@@ -207,6 +223,17 @@ export default function AgentPanel() {
           </button>
           <button
             type="button"
+            data-agent-scope="1"
+            className={`studio-btn h-7 px-2 text-[11px] ${
+              agentScopePicking ? "studio-btn-primary" : ""
+            }`}
+            title="在画布上框出一块区域，Agent 之后只会在该区域内新增内容"
+            onClick={() => toggleAgentScopePicking()}
+          >
+            {agentScope ? "重划范围" : "限定范围"}
+          </button>
+          <button
+            type="button"
             className="studio-btn h-7 px-2 text-[11px]"
             onClick={() => setSidePanel("inspector")}
           >
@@ -229,7 +256,7 @@ export default function AgentPanel() {
                   ...current,
                   provider: event.target.value,
                   baseUrl: next?.baseUrl ?? current.baseUrl,
-                  model: next?.model ?? current.model
+                  model: next?.defaultModel ?? current.model
                 }));
               }}
             >
@@ -253,15 +280,46 @@ export default function AgentPanel() {
           </label>
 
           <label className="block space-y-1">
-            <span className={labelClass}>模型名</span>
+            <span className={labelClass}>模型（可从下拉选，也可直接输入）</span>
             <input
               className={fieldClass}
               data-agent-model="1"
+              list="agent-model-options"
               value={draft.model}
-              placeholder={currentProvider?.model || "模型名"}
+              placeholder={currentProvider?.defaultModel || "模型名"}
               onChange={(event) => setDraft((current) => ({ ...current, model: event.target.value }))}
             />
+            <datalist id="agent-model-options">
+              {(currentProvider?.models ?? []).map((item) => (
+                <option key={item} value={item} />
+              ))}
+            </datalist>
           </label>
+
+          <div className="space-y-1">
+            <span className={labelClass}>思考档位</span>
+            <div className="flex overflow-hidden rounded-lg border border-[var(--line-soft)]">
+              {EFFORT_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  data-agent-effort={option.value}
+                  title={option.hint}
+                  className={`studio-btn h-7 flex-1 rounded-none border-0 px-1 text-[11px] ${
+                    draft.effort === option.value ? "studio-btn-primary" : ""
+                  }`}
+                  onClick={() => setDraft((current) => ({ ...current, effort: option.value }))}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
+              {currentProvider?.effortParam
+                ? `将映射为 ${currentProvider.effortParam} 参数；不同厂商支持的档位不同，不支持的会沿用默认`
+                : "该接口不支持档位参数，这一项会被忽略"}
+            </p>
+          </div>
 
           <label className="block space-y-1">
             <span className={labelClass}>
@@ -287,12 +345,37 @@ export default function AgentPanel() {
         </div>
       ) : null}
 
+      {agentScope ? (
+        <div
+          data-agent-scope-info="1"
+          className="flex flex-wrap items-center gap-2 border-b border-amber-400/50 bg-amber-500/10 px-3 py-2 text-[11px]"
+        >
+          <span className="text-[var(--text-primary)]">
+            作用范围：{Math.round(agentScope.width)} × {Math.round(agentScope.height)} @ (
+            {Math.round(agentScope.x)}, {Math.round(agentScope.y)})
+          </span>
+          <span className="text-[var(--text-secondary)]">越界的操作会被跳过</span>
+          <button
+            type="button"
+            data-agent-scope-clear="1"
+            className="studio-btn ml-auto h-6 px-2 text-[10px]"
+            onClick={() => setAgentScope(null)}
+          >
+            取消限制
+          </button>
+        </div>
+      ) : null}
+
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3">
         {entries.length === 0 ? (
           <div className="space-y-2">
             <p className="text-xs leading-5 text-[var(--text-secondary)]">
               用一句话描述你想要的排版，助手会转换成具体操作并执行。所有改动都进撤销历史，不满意可以
               <span className="text-[var(--text-primary)]"> Ctrl+Z </span>退回。
+              <br />
+              只想改局部？点上方
+              <span className="text-[var(--text-primary)]">「限定范围」</span>
+              在画布上框一块区域，助手就只会在那里动手。
             </p>
             <div className="space-y-1.5">
               {QUICK_TASKS.map((task) => (

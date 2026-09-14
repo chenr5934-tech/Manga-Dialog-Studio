@@ -7,6 +7,7 @@ export type AgentAction =
   | { type: "clearPanels" }
   | { type: "clearBubbles" }
   | { type: "addPanel"; x: number; y: number; width: number; height: number }
+  | { type: "addPolygonPanel"; points: { x: number; y: number }[] }
   | { type: "setBackdropColor"; color: string }
   | { type: "setPanelStyle"; borderRadius?: number; borderWidth?: number; borderColor?: string; gap?: number }
   | {
@@ -25,6 +26,8 @@ export type AgentPlan = {
   actions: AgentAction[];
 };
 
+export type AgentScope = { x: number; y: number; width: number; height: number };
+
 export type AgentContext = {
   canvasWidth: number;
   canvasHeight: number;
@@ -34,7 +37,28 @@ export type AgentContext = {
   bubbleCount: number;
   backdropColor: string;
   presetNames: string[];
+  scope: AgentScope | null;
 };
+
+// 新增内容时中心点必须落在限定范围内，越界直接跳过而不是悄悄塞进去
+function centerWithinScope(scope: AgentScope, x: number, y: number, width: number, height: number): boolean {
+  const centerX = x + width / 2;
+  const centerY = y + height / 2;
+  return (
+    centerX >= scope.x &&
+    centerX <= scope.x + scope.width &&
+    centerY >= scope.y &&
+    centerY <= scope.y + scope.height
+  );
+}
+
+function pointsRoughlyWithinScope(scope: AgentScope, points: { x: number; y: number }[]): boolean {
+  if (points.length === 0) {
+    return true;
+  }
+  const sum = points.reduce((acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }), { x: 0, y: 0 });
+  return centerWithinScope(scope, sum.x / points.length, sum.y / points.length, 0, 0);
+}
 
 export function collectAgentContext(): AgentContext {
   const state = useEditorStore.getState();
@@ -53,7 +77,8 @@ export function collectAgentContext(): AgentContext {
     panelCount: activePage?.panels.length ?? 0,
     bubbleCount: activePage?.bubbles.length ?? 0,
     backdropColor: activePage?.backdropColor ?? "#f4f5f7",
-    presetNames: state.bubblePresets.map((preset) => preset.name)
+    presetNames: state.bubblePresets.map((preset) => preset.name),
+    scope: state.agentScope
   };
 }
 
@@ -70,7 +95,8 @@ export function buildSystemPrompt(context: AgentContext): string {
     '- {"type":"splitGrid","rows":数字,"cols":数字}  把整页均分为若干分镜（会替换现有分镜）',
     '- {"type":"clearPanels"}  清空当前页所有分镜',
     '- {"type":"clearBubbles"}  清空当前页所有文字',
-    '- {"type":"addPanel","x":数字,"y":数字,"width":数字,"height":数字}  指定位置加一个分镜',
+    '- {"type":"addPanel","x":数字,"y":数字,"width":数字,"height":数字}  指定位置加一个矩形分镜',
+    '- {"type":"addPolygonPanel","points":[{"x":数字,"y":数字},...]}  加一个任意多边形分镜，至少 3 个顶点，按顺时针给出',
     '- {"type":"setPanelStyle","borderRadius":数字,"borderWidth":数字,"borderColor":"#RRGGBB","gap":数字}  批量设置所有分镜样式',
     '- {"type":"setBackdropColor","color":"#RRGGBB"}  设置页面底色',
     '- {"type":"addBubble","x":数字,"y":数字,"width":数字,"height":数字,"text":"文字","presetName":"预设名"}  加一个气泡，x/y 是气泡中心点；presetName 可省略',
@@ -89,8 +115,28 @@ export function buildSystemPrompt(context: AgentContext): string {
     "- 当前是第 " + (context.activePageIndex + 1) + " 页，共 " + context.pageCount + " 页",
     "- 当前页已有分镜 " + context.panelCount + " 个、气泡 " + context.bubbleCount + " 个",
     "- 页面底色：" + context.backdropColor,
-    "- 可用的气泡预设名：" + (context.presetNames.join("、") || "（无）")
-  ].join("\n");
+    "- 可用的气泡预设名：" + (context.presetNames.join("、") || "（无）"),
+    context.scope
+      ? [
+          "",
+          "【重要】用户已框定作用范围，你只能在该范围内新增内容，越界会被系统拒绝：",
+          "- 范围左上角 x=" + Math.round(context.scope.x) + "，y=" + Math.round(context.scope.y),
+          "- 范围尺寸 " + Math.round(context.scope.width) + " × " + Math.round(context.scope.height),
+          "- 所有新增的 x 必须落在 " +
+            Math.round(context.scope.x) +
+            " 到 " +
+            Math.round(context.scope.x + context.scope.width) +
+            " 之间，y 落在 " +
+            Math.round(context.scope.y) +
+            " 到 " +
+            Math.round(context.scope.y + context.scope.height) +
+            " 之间",
+          "- 不要把任何分镜或气泡放在范围之外"
+        ].join("\n")
+      : ""
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 // 模型偶尔会裹上代码围栏或加解释，这里逐级兜底提取 JSON
@@ -148,6 +194,8 @@ export function applyAgentPlan(plan: AgentPlan): ApplyResult {
   const store = useEditorStore.getState();
   const applied: string[] = [];
   const errors: string[] = [];
+  // 取一次快照，执行途中范围不会被改掉
+  const scope = store.agentScope;
 
   for (const action of plan.actions) {
     try {
@@ -185,8 +233,35 @@ export function applyAgentPlan(plan: AgentPlan): ApplyResult {
           const y = safeNumber(action.y, 0);
           const width = Math.max(24, safeNumber(action.width, 400));
           const height = Math.max(24, safeNumber(action.height, 400));
+
+          if (scope && !centerWithinScope(scope, x, y, width, height)) {
+            errors.push("分镜超出限定范围，已跳过");
+            break;
+          }
+
           store.createPanelFromRect(x, y, width, height);
           applied.push(`新增分镜 (${Math.round(x)}, ${Math.round(y)})`);
+          break;
+        }
+
+        case "addPolygonPanel": {
+          const rawPoints = Array.isArray(action.points) ? action.points : [];
+          const points = rawPoints
+            .map((point) => ({ x: safeNumber(point?.x, NaN), y: safeNumber(point?.y, NaN) }))
+            .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+
+          if (points.length < 3) {
+            errors.push("多边形至少需要 3 个有效顶点");
+            break;
+          }
+
+          if (scope && !pointsRoughlyWithinScope(scope, points)) {
+            errors.push("多边形超出限定范围，已跳过");
+            break;
+          }
+
+          store.createPolygonPanelFromPoints(points);
+          applied.push(`新增 ${points.length} 边形分镜`);
           break;
         }
 
@@ -221,8 +296,20 @@ export function applyAgentPlan(plan: AgentPlan): ApplyResult {
           const centerX = safeNumber(action.x, canvas.width / 2);
           const centerY = safeNumber(action.y, canvas.height / 2);
 
-          const matched = action.presetName
-            ? page.bubblePresets.find((preset) => preset.name === action.presetName)
+          if (scope && !centerWithinScope(scope, centerX, centerY, 0, 0)) {
+            errors.push(
+              `气泡超出限定范围，已跳过（${Math.round(centerX)}, ${Math.round(centerY)}）`
+            );
+            break;
+          }
+
+          // 预设名允许模糊匹配：模型偶尔只写"旁白框"而不是完整的"旁白框 · 方角"
+          const wanted = String(action.presetName ?? "").trim();
+          const matched = wanted
+            ? (page.bubblePresets.find((preset) => preset.name === wanted) ??
+              page.bubblePresets.find(
+                (preset) => preset.name.includes(wanted) || wanted.includes(preset.name)
+              ))
             : undefined;
 
           if (matched) {

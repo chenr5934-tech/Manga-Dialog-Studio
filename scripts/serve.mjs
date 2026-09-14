@@ -27,28 +27,94 @@ const LIBRARIES = {
 const AGENT_CONFIG_DIR = join(PROJECT_ROOT, "config");
 const AGENT_CONFIG_PATH = join(AGENT_CONFIG_DIR, "agent.json");
 
-// 以下端点均已实测可达（无 key 时返回 401 而非 404）
+// 端点均已实测可达（无 key 时返回 401 而非 404）。
+// 模型列表与思考档位取自各家官方文档；模型名会随时间变化，界面允许直接手填覆盖。
 const AGENT_PROVIDERS = {
-  deepseek: { label: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-chat" },
-  openai: { label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
-  moonshot: { label: "Kimi (Moonshot)", baseUrl: "https://api.moonshot.cn/v1", model: "moonshot-v1-8k" },
+  deepseek: {
+    label: "DeepSeek",
+    baseUrl: "https://api.deepseek.com",
+    models: ["deepseek-v4-pro", "deepseek-flash", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp"],
+    defaultModel: "deepseek-v4-pro",
+    // 官方文档：reasoning_effort 取值 none / low / high / max
+    effortParam: "reasoning_effort",
+    effortMap: { off: "none", low: "low", high: "high", max: "max" }
+  },
+  openai: {
+    label: "OpenAI",
+    baseUrl: "https://api.openai.com/v1",
+    models: ["gpt-5", "gpt-5-mini", "gpt-4.1", "gpt-4o", "gpt-4o-mini"],
+    defaultModel: "gpt-4o-mini",
+    effortParam: "reasoning_effort",
+    effortMap: { off: "low", low: "low", high: "high", max: "high" }
+  },
+  moonshot: {
+    label: "Kimi (Moonshot)",
+    baseUrl: "https://api.moonshot.cn/v1",
+    models: ["kimi-k3", "kimi-k2.6", "kimi-k2.7-code"],
+    defaultModel: "kimi-k3",
+    effortParam: "reasoning_effort",
+    effortMap: { off: "none", low: "low", high: "high", max: "max" }
+  },
   dashscope: {
     label: "通义千问",
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    model: "qwen-plus"
+    models: ["qwen-plus", "qwen-flash", "qwen-turbo", "qwen3-235b-a22b"],
+    defaultModel: "qwen-plus",
+    // 官方文档：开关式 enable_thinking
+    effortParam: "enable_thinking",
+    effortMap: { off: false, low: true, high: true, max: true }
   },
-  zhipu: { label: "智谱 GLM", baseUrl: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash" },
-  ollama: { label: "本地 Ollama", baseUrl: "http://127.0.0.1:11434/v1", model: "qwen2.5" },
-  custom: { label: "自定义（OpenAI 兼容）", baseUrl: "", model: "" }
+  zhipu: {
+    label: "智谱 GLM",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    models: ["glm-5.3", "glm-5", "glm-4.7", "glm-4.6"],
+    defaultModel: "glm-4.7",
+    effortParam: "reasoning_effort",
+    effortMap: { off: "none", low: "low", high: "high", max: "high" }
+  },
+  ollama: {
+    label: "本地 Ollama",
+    baseUrl: "http://127.0.0.1:11434/v1",
+    models: ["qwen2.5", "llama3.1"],
+    defaultModel: "qwen2.5",
+    effortParam: null,
+    effortMap: {}
+  },
+  custom: {
+    label: "自定义（OpenAI 兼容）",
+    baseUrl: "",
+    models: [],
+    defaultModel: "",
+    effortParam: "reasoning_effort",
+    effortMap: { off: "none", low: "low", high: "high", max: "max" }
+  }
 };
 
 const DEFAULT_AGENT_CONFIG = {
   provider: "deepseek",
   baseUrl: AGENT_PROVIDERS.deepseek.baseUrl,
-  model: AGENT_PROVIDERS.deepseek.model,
+  model: AGENT_PROVIDERS.deepseek.defaultModel,
   apiKey: "",
-  temperature: 0.3
+  temperature: 0.3,
+  effort: "auto"
 };
+
+// 把统一的档位翻译成各家自己的参数；不支持的厂商直接不发该参数
+function buildEffortParams(config) {
+  const preset = AGENT_PROVIDERS[config.provider];
+  if (!preset?.effortParam || !preset.effortMap) {
+    return {};
+  }
+  const effort = String(config.effort ?? "auto");
+  if (effort === "auto") {
+    return {};
+  }
+  const value = preset.effortMap[effort];
+  if (value === undefined) {
+    return {};
+  }
+  return { [preset.effortParam]: value };
+}
 
 function readAgentConfig() {
   try {
@@ -56,7 +122,8 @@ function readAgentConfig() {
     return {
       ...DEFAULT_AGENT_CONFIG,
       ...parsed,
-      temperature: Number.isFinite(Number(parsed?.temperature)) ? Number(parsed.temperature) : 0.3
+      temperature: Number.isFinite(Number(parsed?.temperature)) ? Number(parsed.temperature) : 0.3,
+      effort: String(parsed?.effort ?? "auto")
     };
   } catch {
     return { ...DEFAULT_AGENT_CONFIG };
@@ -283,6 +350,7 @@ async function handleAgentApi(request, response, pathname) {
       baseUrl: config.baseUrl,
       model: config.model,
       temperature: config.temperature,
+      effort: config.effort,
       hasApiKey: Boolean(config.apiKey),
       apiKeyHint: maskApiKey(config.apiKey),
       providers: Object.entries(AGENT_PROVIDERS).map(([id, preset]) => ({ id, ...preset }))
@@ -303,7 +371,8 @@ async function handleAgentApi(request, response, pathname) {
     const providerId = AGENT_PROVIDERS[payload?.provider] ? payload.provider : current.provider;
     const preset = AGENT_PROVIDERS[providerId];
     const baseUrl = String(payload?.baseUrl ?? "").trim() || preset.baseUrl || current.baseUrl;
-    const model = String(payload?.model ?? "").trim() || preset.model || current.model;
+    // 模型允许手填覆盖预设，方便新模型发布后立即使用
+    const model = String(payload?.model ?? "").trim() || preset.defaultModel || current.model;
 
     // 传了空字符串表示沿用已保存的密钥，避免前端回写打码值
     const apiKey =
@@ -311,12 +380,18 @@ async function handleAgentApi(request, response, pathname) {
         ? payload.apiKey.trim()
         : current.apiKey;
 
+    const allowedEfforts = ["auto", "off", "low", "high", "max"];
+    const effort = allowedEfforts.includes(String(payload?.effort))
+      ? String(payload.effort)
+      : current.effort;
+
     const next = {
       provider: providerId,
       baseUrl,
       model,
       apiKey,
-      temperature: Number.isFinite(Number(payload?.temperature)) ? Number(payload.temperature) : current.temperature
+      temperature: Number.isFinite(Number(payload?.temperature)) ? Number(payload.temperature) : current.temperature,
+      effort
     };
 
     try {
@@ -331,6 +406,7 @@ async function handleAgentApi(request, response, pathname) {
       provider: next.provider,
       baseUrl: next.baseUrl,
       model: next.model,
+      effort: next.effort,
       hasApiKey: Boolean(next.apiKey),
       apiKeyHint: maskApiKey(next.apiKey)
     });
@@ -376,7 +452,8 @@ async function handleAgentApi(request, response, pathname) {
           model: config.model,
           messages,
           temperature: config.temperature,
-          stream: false
+          stream: false,
+          ...buildEffortParams(config)
         }),
         signal: controller.signal
       });

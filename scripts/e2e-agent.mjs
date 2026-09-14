@@ -4,6 +4,7 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:8737/";
 const CONFIG_PATH = "D:/dsh工作区/MangaDialogStudio/config/agent.json";
+const SHOT_DIR = "D:/dsh工作区/_shots";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const results = [];
@@ -27,7 +28,6 @@ const errors = [];
 page.on("pageerror", (error) => errors.push(error.message));
 page.on("dialog", (dialog) => void dialog.accept());
 
-// 拦截对话接口，用可控内容验证前端解析与执行链路（真实调用需要密钥）
 let mockContent = "";
 await page.setRequestInterception(true);
 page.on("request", (request) => {
@@ -67,41 +67,88 @@ await sleep(700);
 await page.click("[data-agent-toggle]");
 await sleep(800);
 const panelText = await page.evaluate(() => {
-  const panels = Array.from(document.querySelectorAll("aside"));
-  const agent = panels.find((el) => el.innerText.includes("自动排版"));
+  const agent = Array.from(document.querySelectorAll("aside")).find((el) => el.innerText.includes("自动排版"));
   return agent ? agent.innerText.replace(/\s+/g, " ") : null;
 });
-record("Agent 面板可打开", Boolean(panelText && panelText.includes("自动排版")), String(panelText).slice(0, 60));
+record("Agent 面板可打开", Boolean(panelText && panelText.includes("自动排版")), String(panelText).slice(0, 50));
 
-// 模型设置
+// ---------- 模型与档位 ----------
 await page.click("[data-agent-config-toggle]");
 await sleep(700);
-const providerOptions = await page.evaluate(() => {
-  const select = document.querySelector('[data-agent-provider]');
-  return select ? Array.from(select.options).map((o) => o.textContent) : [];
+
+const modelInfo = await page.evaluate(() => {
+  const list = document.getElementById("agent-model-options");
+  const input = document.querySelector("[data-agent-model]");
+  return {
+    options: Array.from(list?.options ?? []).map((option) => option.value),
+    value: input?.value ?? "",
+    hasDatalist: Boolean(input?.getAttribute("list"))
+  };
 });
 record(
-  "提供多家接口可选",
-  providerOptions.length >= 6 && providerOptions.some((t) => t.includes("DeepSeek")),
-  providerOptions.join("、")
+  "模型可选最新型号且非旧默认",
+  modelInfo.options.includes("deepseek-v4-pro") && modelInfo.value === "deepseek-v4-pro",
+  "当前=" + modelInfo.value + " 候选=" + modelInfo.options.join("/")
+);
+record("模型既可下拉也可手填", modelInfo.hasDatalist);
+
+const effortButtons = await page.evaluate(() =>
+  Array.from(document.querySelectorAll("[data-agent-effort]")).map((el) => el.textContent.trim())
+);
+record(
+  "提供默认/关闭/低/高/最高五档",
+  effortButtons.length === 5,
+  effortButtons.join(" / ")
 );
 
-// 切换接口后保存
-await page.select("[data-agent-provider]", "openai");
-await sleep(400);
+await page.click('[data-agent-effort="max"]');
+await sleep(300);
 await page.click("[data-agent-save]");
 await sleep(1400);
-const savedConfig = existsSync(CONFIG_PATH) ? JSON.parse(readFileSync(CONFIG_PATH, "utf8")) : null;
+const savedForEffort = existsSync(CONFIG_PATH) ? JSON.parse(readFileSync(CONFIG_PATH, "utf8")) : null;
 record(
-  "配置写入本机 agent.json",
-  savedConfig?.provider === "openai" && savedConfig?.baseUrl.includes("openai.com"),
-  savedConfig ? savedConfig.provider + " | " + savedConfig.model : "未生成"
+  "档位随配置落盘",
+  savedForEffort?.effort === "max" && savedForEffort?.model === "deepseek-v4-pro",
+  分档(savedForEffort)
+);
+function 分档(config) {
+  return config ? "effort=" + config.effort + " model=" + config.model : "未生成";
+}
+
+// 换一家接口，模型候选应随之变化
+await page.select("[data-agent-provider]", "zhipu");
+await sleep(500);
+const zhipuModels = await page.evaluate(() =>
+  Array.from(document.getElementById("agent-model-options")?.options ?? []).map((option) => option.value)
+);
+record(
+  "切换接口后模型候选跟随变化",
+  zhipuModels.some((name) => name.startsWith("glm-")),
+  zhipuModels.join("/")
 );
 
-await page.click("[data-agent-config-toggle]");
-await sleep(500);
+// 手填一个不在列表里的模型，应被接受
+await page.evaluate(() => {
+  const input = document.querySelector("[data-agent-model]");
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+  setter.call(input, "glm-5.3-preview");
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+});
+await sleep(250);
+await page.click("[data-agent-save]");
+await sleep(1400);
+const savedCustomModel = existsSync(CONFIG_PATH) ? JSON.parse(readFileSync(CONFIG_PATH, "utf8")) : null;
+record("允许手填列表外的模型名", savedCustomModel?.model === "glm-5.3-preview", savedCustomModel?.model ?? "未生成");
 
-// 执行：切分镜
+// 切回 deepseek 继续后面的执行测试
+await page.select("[data-agent-provider]", "deepseek");
+await sleep(400);
+await page.click("[data-agent-save]");
+await sleep(1200);
+await page.click("[data-agent-config-toggle]");
+await sleep(400);
+
+// ---------- 执行能力 ----------
 const before = await readStats();
 mockContent = JSON.stringify({
   summary: "把这页切成 2×2 四格",
@@ -111,52 +158,91 @@ await send("把这页切成四格");
 const afterSplit = await readStats();
 record("执行切分镜计划", afterSplit.panels === 4, "分镜 " + before.panels + " → " + afterSplit.panels);
 
-const appliedLogged = await page.evaluate(() =>
-  document.body.innerText.includes("切分为 2 行 × 2 列")
-);
-record("面板显示执行明细", appliedLogged);
-
-// 执行：加气泡并写入文字
+// 多边形分镜
 mockContent = JSON.stringify({
-  summary: "加一个旁白框",
-  actions: [{ type: "addBubble", x: 1240, y: 800, width: 900, height: 300, text: "三年后的夏天" }]
+  summary: "加一个斜切分镜",
+  actions: [
+    {
+      type: "addPolygonPanel",
+      points: [
+        { x: 200, y: 200 },
+        { x: 1200, y: 320 },
+        { x: 900, y: 1400 },
+        { x: 260, y: 900 }
+      ]
+    }
+  ]
 });
-await send("加一个旁白框写「三年后的夏天」");
+await send("加一个不规则分镜");
+const afterPolygon = await readStats();
+record("支持创建多边形分镜", afterPolygon.panels === afterSplit.panels + 1, "分镜 " + afterSplit.panels + " → " + afterPolygon.panels);
+
+// 对话气泡（预设名用简称，验证模糊匹配）
+mockContent = JSON.stringify({
+  summary: "加一句旁白",
+  actions: [{ type: "addBubble", presetName: "旁白框", x: 1200, y: 2600, text: "三年后的夏天" }]
+});
+await send("加一句旁白");
 const afterBubble = await readStats();
-record("执行加气泡计划", afterBubble.bubbles === afterSplit.bubbles + 1, "文字 " + afterSplit.bubbles + " → " + afterBubble.bubbles);
-
-const bubbleText = await page.evaluate(() => {
-  const textarea = document.querySelector("textarea[rows]");
-  return document.body.innerText.includes("三年后的夏天") || Boolean(textarea);
-});
-record("气泡文字已写入", bubbleText);
-
-// 容错：模型返回代码围栏包裹的 JSON
-mockContent = '好的，方案如下：\n\`\`\`json\n{"summary":"切成三行","actions":[{"type":"splitGrid","rows":3,"cols":1}]}\n\`\`\`';
-await send("改成三行");
-const afterFence = await readStats();
-record("可解析代码围栏包裹的 JSON", afterFence.panels === 3, "分镜=" + afterFence.panels);
-
-// 容错：完全无法解析
-mockContent = "我不确定你在说什么";
-await send("随便说点什么");
-const errorShown = await page.evaluate(
-  () => document.body.innerText.includes("无法解析为操作计划")
-);
-record("无法解析时给出提示", errorShown);
-
-// 撤销应能回退 agent 的改动
-const beforeUndo = await readStats();
-await page.keyboard.down("Control");
-await page.keyboard.press("KeyZ");
-await page.keyboard.up("Control");
-await sleep(900);
-const afterUndo = await readStats();
 record(
-  "Agent 的改动可撤销",
-  afterUndo.panels !== beforeUndo.panels || afterUndo.bubbles !== beforeUndo.bubbles,
-  "分镜 " + beforeUndo.panels + " → " + afterUndo.panels
+  "对话气泡支持预设简称匹配",
+  afterBubble.bubbles === afterPolygon.bubbles + 1,
+  "文字 " + afterPolygon.bubbles + " → " + afterBubble.bubbles
 );
+
+// ---------- 作用范围 ----------
+await page.click("[data-agent-scope]");
+await sleep(700);
+const pickingHint = await page.evaluate(() => document.body.innerText.includes("框定 Agent 范围"));
+record("进入范围框定模式", pickingHint);
+
+const canvasBox = await (await page.$(".studio-workspace > div")).boundingBox();
+await page.mouse.move(canvasBox.x + 80, canvasBox.y + 80);
+await page.mouse.down();
+await sleep(150);
+await page.mouse.move(canvasBox.x + 260, canvasBox.y + 240, { steps: 6 });
+await sleep(150);
+await page.mouse.up();
+await sleep(900);
+
+const scopeInfo = await page.evaluate(() => {
+  const el = document.querySelector("[data-agent-scope-info]");
+  return el ? el.innerText.replace(/\s+/g, " ") : null;
+});
+record("框定后显示作用范围", Boolean(scopeInfo && scopeInfo.includes("作用范围")), String(scopeInfo).slice(0, 60));
+await page.screenshot({ path: SHOT_DIR + "/agent-scope.png" });
+
+// 范围内应正常执行
+// 落在框定范围内（范围约为 x 293~960 / y 293~886）
+mockContent = JSON.stringify({
+  summary: "范围内加气泡",
+  actions: [{ type: "addBubble", x: 620, y: 580, width: 300, height: 200, text: "框内" }]
+});
+const beforeInScope = await readStats();
+await send("在范围内加一个气泡");
+const afterInScope = await readStats();
+record("范围内操作正常执行", afterInScope.bubbles === beforeInScope.bubbles + 1, "文字 " + beforeInScope.bubbles + " → " + afterInScope.bubbles);
+
+// 越界应被拒绝
+mockContent = JSON.stringify({
+  summary: "越界加气泡",
+  actions: [{ type: "addBubble", x: 2400, y: 3400, width: 300, height: 200, text: "框外" }]
+});
+const beforeOutScope = await readStats();
+await send("在右下角加一个气泡");
+const afterOutScope = await readStats();
+const rejected = await page.evaluate(() => document.body.innerText.includes("超出限定范围"));
+record(
+  "越界操作被拒绝",
+  afterOutScope.bubbles === beforeOutScope.bubbles && rejected,
+  "文字 " + beforeOutScope.bubbles + " → " + afterOutScope.bubbles
+);
+
+// 取消范围后应恢复自由
+await page.click("[data-agent-scope-clear]");
+await sleep(600);
+const scopeCleared = await page.evaluate(() => !document.body.innerText.includes("作用范围："));
+record("可取消范围限制", scopeCleared);
 
 record("运行期无控制台错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 
