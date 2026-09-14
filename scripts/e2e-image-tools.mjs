@@ -248,11 +248,25 @@ await page.evaluate(() => {
     const a = after.data;
     const width = base.width;
     const height = base.height;
+    // 选中手柄是蓝色（#bfdbfe / #2563eb）。新建椭圆后它会带着四角手柄一起出现，
+    // 把锚点算进轮廓差异会把包围盒撑到分镜外，判不出形状。
+    const isSelectionHandle = (index) => {
+      const r = a[index];
+      const g = a[index + 1];
+      const bl = a[index + 2];
+      // 按具体手柄色值判；不能按"蓝色系"粗判——选中态分镜的边框也是蓝色
+      return (
+        (Math.abs(r - 191) < 18 && Math.abs(g - 219) < 18 && Math.abs(bl - 254) < 18) ||
+        (Math.abs(r - 37) < 30 && Math.abs(g - 99) < 30 && Math.abs(bl - 235) < 30)
+      );
+    };
+
     const delta = (index) =>
-      Math.abs(b[index] - a[index]) +
-      Math.abs(b[index + 1] - a[index + 1]) +
-      Math.abs(b[index + 2] - a[index + 2]) +
-      Math.abs(b[index + 3] - a[index + 3]);
+      (isSelectionHandle(index) ? 0 :
+        Math.abs(b[index] - a[index]) +
+        Math.abs(b[index + 1] - a[index + 1]) +
+        Math.abs(b[index + 2] - a[index + 2]) +
+        Math.abs(b[index + 3] - a[index + 3]));
 
     let minX = width;
     let minY = height;
@@ -346,6 +360,12 @@ await page.evaluate(() => {
 });
 await page.click('[data-add-ellipse-panel="1"]');
 await sleep(1400);
+
+// 取消选中：椭圆只占页面中间，四角是空的。带着选中态探测的话，
+// 四角锚点会把差异区域的包围盒撑到分镜外，形状就判不准了。
+const ellipseBox = await (await page.$(".studio-workspace > div")).boundingBox();
+await page.mouse.click(ellipseBox.x + 8, ellipseBox.y + 8);
+await sleep(600);
 const ellipseStat = await page.evaluate(() => window.__shapeProbe(window.__baseEllipse, window.__composite()));
 record(
   "椭圆分镜已创建并渲染",

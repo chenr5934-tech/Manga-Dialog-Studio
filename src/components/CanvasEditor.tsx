@@ -55,6 +55,8 @@ const ALL_TRANSFORMER_ANCHORS: string[] = [
   "bottom-right"
 ];
 const BUBBLE_TRANSFORMER_ANCHORS: string[] = ["top-center", "middle-left", "middle-right", "bottom-center"];
+// 椭圆分镜只用四角锚点：它的斜切手柄没有意义，等比缩放靠 keepRatio
+const ELLIPSE_TRANSFORMER_ANCHORS: string[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
 
 function formatFilename(projectName: string, ext: "png" | "pdf" | "zip") {
   const safe = projectName.trim().replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]/g, "_") || "manga-dialog-studio";
@@ -217,6 +219,10 @@ function PanelFillShape({ panel }: { panel: Panel }) {
   return (
     <Shape
       // Even transparent panels need a fill so Konva can build a hit area for selection and dragging.
+      // 自定义 sceneFunc 的 Shape 不会自己算包围盒：getSelfRect 读的是 width/height，
+      // 不设的话包围盒是 0×0，Transformer 的四个缩放手柄会全部叠在同一个点上。
+      width={panel.width}
+      height={panel.height}
       sceneFunc={(context, shape) => {
         context.beginPath();
         // 填充同样按 gap 内缩：边框与内容之间留出一圈底色，内边距才有肉眼可见的效果
@@ -238,6 +244,8 @@ function PanelBorderShape({
 }) {
   return (
     <Shape
+      width={panel.width}
+      height={panel.height}
       sceneFunc={(context, shape) => {
         context.beginPath();
         drawPanelPath(context, panel);
@@ -655,8 +663,22 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
   const liveSnapEnabled =
     snapSizeTo16 &&
     (selection?.kind !== "panel" || !selectedPanel || Math.abs(normalizePanelRotation(selectedPanel.rotation)) < 0.001);
+  // 椭圆分镜用 Transformer 的四角手柄等比缩放。直接从 store 订阅，
+  // 不走组件内的 useMemo——锚点配置对渲染时机很敏感，间接取到的值容易是旧的。
+  const ellipsePanelSelected = useEditorStore((state) => {
+    if (state.selection?.kind !== "panel") {
+      return false;
+    }
+    const page = getActivePage(state.project);
+    return page.panels.find((item) => item.id === state.selection?.id)?.shapeKind === "ellipse";
+  });
+
   const styleTransformerAnchor = (anchor: Konva.Rect) => {
     if (selection?.kind !== "panel") {
+      return;
+    }
+
+    if (ellipsePanelSelected && !anchor.hasName("rotater")) {
       return;
     }
 
@@ -712,6 +734,12 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
   useEffect(() => {
     const transformer = transformerRef.current;
     if (!transformer || selection?.kind !== "panel") {
+      return;
+    }
+
+    // 椭圆分镜没有斜切手柄，它靠 Transformer 的四角锚点等比缩放，
+    // 这里不能跟着矩形/多边形一起把锚点收掉。
+    if (ellipsePanelSelected) {
       return;
     }
 
@@ -1434,7 +1462,10 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                       />
                     ) : null}
 
-                    {selected && !displayPanel.points && !pickingMode ? (
+                    {selected &&
+                      !displayPanel.points &&
+                      displayPanel.shapeKind !== "ellipse" &&
+                      !pickingMode ? (
                       <PanelSkewHandles
                         panel={displayPanel}
                         onDraftChange={(patch) => {
@@ -1664,8 +1695,12 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                   !isExporting && !pickingMode && (selection?.kind === "panel" || selection?.kind === "overlay")
                 }
                 resizeEnabled={
-                  !isExporting && !pickingMode && (selection?.kind === "bubble" || selection?.kind === "overlay")
+                  !isExporting &&
+                  !pickingMode &&
+                  (selection?.kind === "bubble" || selection?.kind === "overlay" || ellipsePanelSelected)
                 }
+                // 椭圆等比缩放：拖角时保持长短轴比例，不会被拉扁
+                keepRatio={ellipsePanelSelected}
                 flipEnabled={false}
                 enabledAnchors={
                   !isExporting && !pickingMode
@@ -1673,12 +1708,15 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                       ? BUBBLE_TRANSFORMER_ANCHORS
                       : selection?.kind === "overlay"
                         ? ALL_TRANSFORMER_ANCHORS
-                        : []
+                        : ellipsePanelSelected
+                          ? ELLIPSE_TRANSFORMER_ANCHORS
+                          : []
                     : []
                 }
                 anchorSize={TRANSFORMER_ANCHOR_SIZE}
-                keepRatio={false}
-                anchorStyleFunc={styleTransformerAnchor}
+                // 椭圆分镜直接用 Konva 默认锚点样式：anchorStyleFunc 是闭包，
+                // Konva 只在 update() 时调用它，很容易拿到过期的选中状态
+                anchorStyleFunc={ellipsePanelSelected ? undefined : styleTransformerAnchor}
                 borderEnabled={!isExporting && !pickingMode && selection?.kind === "bubble"}
                 borderStroke="#2563eb"
                 anchorStroke="#2563eb"
