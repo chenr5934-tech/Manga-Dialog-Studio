@@ -24,7 +24,7 @@ import {
 } from "../lib/panelGeometry";
 import { drawPanelPath, getPanelImageLayout } from "../lib/panelRender";
 import { DEFAULT_BACKDROP_COLOR, normalizeBubbleSize } from "../lib/project";
-import { PRESET_DND_MIME } from "../lib/dnd";
+import { PRESET_DND_MIME, STICKER_DND_MIME } from "../lib/dnd";
 import { getActivePage, useEditorStore } from "../lib/store";
 import { BubbleShapeLayer, BubbleTextLayer, resolveBubbleOpacity } from "./BubbleVisual";
 
@@ -514,6 +514,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
   const updatePanel = useEditorStore((state) => state.updatePanel);
   const updateBubble = useEditorStore((state) => state.updateBubble);
   const createPanelFromRect = useEditorStore((state) => state.createPanelFromRect);
+  const addStickerOverlay = useEditorStore((state) => state.addStickerOverlay);
   const createEllipsePanelFromRect = useEditorStore((state) => state.createEllipsePanelFromRect);
   const addBubbleFromPreset = useEditorStore((state) => state.addBubbleFromPreset);
   const toggleManualPanelMode = useEditorStore((state) => state.toggleManualPanelMode);
@@ -1162,14 +1163,18 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
               height: Math.ceil(activePage.canvas.height * zoom)
             }}
             onDragOver={(event) => {
-              if (event.dataTransfer.types.includes(PRESET_DND_MIME)) {
+              if (
+                event.dataTransfer.types.includes(PRESET_DND_MIME) ||
+                event.dataTransfer.types.includes(STICKER_DND_MIME)
+              ) {
                 event.preventDefault();
                 event.dataTransfer.dropEffect = "copy";
               }
             }}
             onDrop={(event) => {
+              const stickerId = event.dataTransfer.getData(STICKER_DND_MIME);
               const presetId = event.dataTransfer.getData(PRESET_DND_MIME);
-              if (!presetId) {
+              if (!stickerId && !presetId) {
                 return;
               }
 
@@ -1179,6 +1184,13 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                 x: event.clientX - rect.left,
                 y: event.clientY - rect.top
               });
+
+              // 贴纸拖进来时以指针为中心落下，和气泡预设的投放行为一致
+              if (stickerId) {
+                addStickerOverlay(stickerId, undefined, scenePoint);
+                return;
+              }
+
               addBubbleFromPreset(presetId, scenePoint);
             }}
           >

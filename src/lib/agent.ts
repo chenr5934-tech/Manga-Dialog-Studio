@@ -1,4 +1,5 @@
 import { useEditorStore } from "./store";
+import { AgentSkill, formatSkillCatalog } from "./agentSkills";
 
 // Agent 能执行的操作。范围刻意收窄：只暴露可撤销、不破坏文件的操作。
 export type AgentAction =
@@ -24,6 +25,8 @@ export type AgentAction =
 
 export type AgentPlan = {
   summary: string;
+  // 模型要求加载的技能 id；加载完再给 actions
+  requestedSkills: string[];
   actions: AgentAction[];
 };
 
@@ -119,13 +122,36 @@ export function collectAgentContext(): AgentContext {
   };
 }
 
-export function buildSystemPrompt(context: AgentContext, customPrompt?: string): string {
+export function buildSystemPrompt(
+  context: AgentContext,
+  customPrompt?: string,
+  loadedSkills: AgentSkill[] = []
+): string {
   const extra = String(customPrompt ?? "").trim();
+  // 技能目录常驻在提示词里；一旦模型点名要哪个，就把该技能的正文整块补进去
+  const skillBlock = loadedSkills.length
+    ? [
+        "",
+        "【已加载的技能正文】",
+        "下面是完整指导，请据此给出最终 actions。",
+        ...loadedSkills.map((skill) => "\n### " + skill.name + "（" + skill.id + "）\n" + skill.body)
+      ].join("\n")
+    : [
+        "",
+        "【可用技能：按需加载】",
+        "遇到需要真正排版判断的请求（分格节奏、构图取景、气泡布局、照着参考图复刻），先要求加载对应技能：",
+        '在 JSON 里加 "skills": ["技能 id"]，并把 actions 设为空数组；系统会把技能正文发给你，你在下一轮再给出真正的 actions。',
+        "",
+        formatSkillCatalog(),
+        "",
+        "简单直接的请求（加一个气泡、改画布尺寸、清空分镜）不必加载技能，直接给 actions。一次最多加载 2 个最相关的技能。"
+      ].join("\n");
   return [
     "你是漫画分镜排版助手，负责把用户的中文指令转换成一组可执行操作。",
     "",
     "只输出一个 JSON 对象，不要任何解释、不要 Markdown 代码围栏。格式：",
     '{"summary": "一句话说明你要做什么", "actions": [ {"type": "...", ...} ]}',
+    skillBlock,
     "",
     "【可用操作】",
     '- {"type":"setCanvasSize","width":数字,"height":数字}  设定当前页画布尺寸',
@@ -219,13 +245,24 @@ export function parseAgentPlan(content: string): AgentPlan | null {
 
   for (const candidate of candidates) {
     try {
-      const parsed = JSON.parse(candidate) as Partial<AgentPlan>;
-      if (!parsed || !Array.isArray(parsed.actions)) {
+      const parsed = JSON.parse(candidate) as Partial<AgentPlan> & { skills?: unknown };
+      if (!parsed || typeof parsed !== "object") {
         continue;
       }
+
+      // 模型可以先只要技能正文（actions 留空），拿到指导后下一轮再给操作
+      const hasActions = Array.isArray(parsed.actions);
+      const requestedSkills = Array.isArray(parsed.skills)
+        ? parsed.skills.filter((item): item is string => typeof item === "string")
+        : [];
+      if (!hasActions && requestedSkills.length === 0) {
+        continue;
+      }
+
       return {
         summary: typeof parsed.summary === "string" ? parsed.summary : "已生成排版方案",
-        actions: parsed.actions as AgentAction[]
+        actions: hasActions ? (parsed.actions as AgentAction[]) : [],
+        requestedSkills
       };
     } catch {
       continue;

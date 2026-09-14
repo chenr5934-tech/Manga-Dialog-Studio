@@ -30,12 +30,16 @@ page.on("dialog", (dialog) => void dialog.accept());
 
 let mockContent = "";
 let lastUserMessage = null;
+let lastSystemPrompt = "";
+let chatRequestCount = 0;
 await page.setRequestInterception(true);
 page.on("request", (request) => {
   if (request.url().includes("/api/agent/chat")) {
     try {
       const body = JSON.parse(request.postData() ?? "{}");
       lastUserMessage = body.messages?.[body.messages.length - 1] ?? null;
+      lastSystemPrompt = String(body.messages?.[0]?.content ?? "");
+      chatRequestCount += 1;
     } catch {
       lastUserMessage = null;
     }
@@ -321,7 +325,6 @@ record(
 record("参考图在发送后清空", !(await page.evaluate(() => Boolean(document.querySelector("[data-agent-reference]")))));
 
 // ---------- 椭圆分镜 / 留白 / 自定义提示词 ----------
-let lastSystemPrompt = null;
 page.on("request", (request) => {
   if (request.url().includes("/api/agent/chat")) {
     try {
@@ -411,6 +414,43 @@ record(
 record(
   "内置提示词禁止照抄图中文字",
   String(lastSystemPrompt ?? "").includes("不要照抄图里的文字"),
+  ""
+);
+
+// ---------- 内置排版技能 ----------
+// 中性请求：没有命中任何技能关键词时，提示词里应该是技能目录
+mockContent = JSON.stringify({ summary: "改底色", actions: [{ type: "setBackdropColor", color: "#f5f1e8" }] });
+await send("把底色换成米色");
+record(
+  "没命中关键词时提示词里常驻技能目录",
+  lastSystemPrompt.includes("可用技能：按需加载") && lastSystemPrompt.includes("grid-rhythm"),
+  "提示词长度=" + lastSystemPrompt.length
+);
+
+mockContent = JSON.stringify({
+  summary: "切成四格",
+  actions: [{ type: "splitGrid", rows: 2, cols: 2, gap: 60 }]
+});
+await send("把这页切成 2×2 四格");
+record(
+  "说到分格时自动注入分格节奏正文",
+  lastSystemPrompt.includes("一页 3～7 格读起来最舒服"),
+  lastSystemPrompt.includes("已加载的技能正文") ? "已注入" : "未注入"
+);
+
+// 模型自己点名要技能时，应当补一轮请求把正文带上
+const beforeSkillRound = chatRequestCount;
+mockContent = JSON.stringify({ summary: "先取技能", actions: [], skills: ["eye-path"] });
+await send("优化一下这页");
+await sleep(1800);
+record(
+  "模型点名要技能时会补一轮请求",
+  chatRequestCount >= beforeSkillRound + 2,
+  "请求次数 " + beforeSkillRound + " → " + chatRequestCount
+);
+record(
+  "补的那一轮带上了视线引导正文",
+  lastSystemPrompt.includes("视线引导") && lastSystemPrompt.includes("Z 字形"),
   ""
 );
 

@@ -356,14 +356,54 @@ record(
   starBox && blueBox ? "爱心x=" + blueBox.minX + " 星星x=" + starBox.minX : "无数据"
 );
 
+// 5b) 拖拽投放：拖到画布指定位置，贴纸应当落在指针处而不是中央
+await page.click('[data-tool="stickers"]');
+await sleep(500);
+// 用九宫波点：形状分布对称，包围盒中心就是贴纸中心；它的紫色也与前面用过的红/橙/蓝拉得开
+await page.click('[data-sticker-group="效果"]');
+await sleep(500);
+const dropInfo = await page.evaluate(() => {
+  // 用菱形：颜色唯一，且它在默认分组里；前面已加过爱心和星星，同色会让像素包围盒算错中心
+  const card = document.querySelector('[data-sticker-id="dots"]');
+  const canvas = document.querySelector(".studio-workspace > div");
+  if (!card || !canvas) {
+    return null;
+  }
+  const rect = canvas.getBoundingClientRect();
+  // 故意落在画布左上区域，和默认的中央落点明显不同
+  const clientX = rect.left + rect.width * 0.26;
+  const clientY = rect.top + rect.height * 0.22;
+  const dataTransfer = new DataTransfer();
+  card.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer }));
+  const options = { bubbles: true, cancelable: true, dataTransfer, clientX, clientY };
+  canvas.dispatchEvent(new DragEvent("dragover", options));
+  canvas.dispatchEvent(new DragEvent("drop", options));
+  return { offsetX: clientX - rect.left, offsetY: clientY - rect.top };
+});
+await sleep(1000);
+
+const droppedBox = await page.evaluate(() => window.__colorBox(window.__composite(), [168, 85, 247]));
+const dropCenterX = droppedBox ? (droppedBox.minX + droppedBox.maxX) / 2 : null;
+const dropCenterY = droppedBox ? (droppedBox.minY + droppedBox.maxY) / 2 : null;
+record(
+  "贴纸可以拖到画布指定位置",
+  Boolean(dropInfo && droppedBox) &&
+    Math.abs(dropCenterX - dropInfo.offsetX) < 12 &&
+    Math.abs(dropCenterY - dropInfo.offsetY) < 12,
+  dropInfo && droppedBox
+    ? "落点 " + Math.round(dropInfo.offsetX) + "," + Math.round(dropInfo.offsetY) + " 实际 " + Math.round(dropCenterX) + "," + Math.round(dropCenterY)
+    : "未投放成功"
+);
+
 // 6) 删除
-const beforeDelete = await page.evaluate(() => window.__colorBox(window.__composite(), [245, 158, 11]));
+// 当前选中的是刚拖进来的月牙
+const beforeDelete = await page.evaluate(() => window.__colorBox(window.__composite(), [168, 85, 247]));
 await page.evaluate(() => {
   const button = document.querySelector("[data-overlay-delete]");
   button?.click();
 });
 await sleep(800);
-const afterDelete = await page.evaluate(() => window.__colorBox(window.__composite(), [245, 158, 11]));
+const afterDelete = await page.evaluate(() => window.__colorBox(window.__composite(), [168, 85, 247]));
 record(
   "贴纸可以删除",
   Boolean(beforeDelete) && !afterDelete,

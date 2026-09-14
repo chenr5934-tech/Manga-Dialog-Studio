@@ -142,7 +142,8 @@ type EditorStore = {
   selectBubble: (id: string) => void;
   selectOverlay: (id: string) => void;
 
-  addStickerOverlay: (stickerId: string, color?: string) => void;
+  // anchor 是贴纸中心点；不传则落在画布中央（连续添加会自动错位）
+  addStickerOverlay: (stickerId: string, color?: string, anchor?: { x: number; y: number }) => void;
   addOverlayImage: (input: {
     image: string;
     naturalWidth: number;
@@ -2522,7 +2523,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  addStickerOverlay: (stickerId, color) => {
+  addStickerOverlay: (stickerId, color, anchor) => {
     set((state) => {
       const def = getStickerDef(stickerId);
       // 内置贴纸查表，自定义贴纸存在用户自己的列表里
@@ -2552,10 +2553,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // 连续添加时逐个小幅错位，否则新贴纸会完全盖住上一张，看不出加了几张
       const shift = ((activePage.overlays ?? []).length % 6) * Math.round(size * 0.16);
 
+      // 拖拽投放时以指针为中心；否则落在画布中央并逐个错位
+      const x = anchor ? Math.round(anchor.x - width / 2) : Math.round((canvas.width - width) / 2 + shift);
+      const y = anchor ? Math.round(anchor.y - height / 2) : Math.round((canvas.height - height) / 2 + shift);
+
       const overlay: OverlayImage = {
         id: uuidv4(),
-        x: Math.round((canvas.width - width) / 2 + shift),
-        y: Math.round((canvas.height - height) / 2 + shift),
+        x,
+        y,
         width,
         height,
         rotation: 0,

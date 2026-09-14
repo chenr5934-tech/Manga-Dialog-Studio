@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { BubblePreset } from "../types";
-import { IMAGE_FILE_ACCEPT, loadImageElement, PRESET_DND_MIME, readImageFileAsDataUrl } from "../lib/dnd";
+import {
+  IMAGE_FILE_ACCEPT,
+  PRESET_DND_MIME,
+  STICKER_DND_MIME,
+  loadImageElement,
+  readImageFileAsDataUrl
+} from "../lib/dnd";
 import { normalizePreset } from "../lib/presets";
 import { getActivePage, useEditorStore } from "../lib/store";
 import { StickerDef, listStickerGroups, normalizeCustomStickers } from "../lib/stickers";
@@ -507,9 +513,14 @@ export default function LeftToolPanel({ onExportPng, onExportPdf, onExportZip }:
                     >
                       <button
                         type="button"
+                        draggable
+                        onDragStart={(event) => {
+                          event.dataTransfer.setData(STICKER_DND_MIME, item.id);
+                          event.dataTransfer.effectAllowed = "copy";
+                        }}
                         data-sticker-id={item.id}
-                        title={item.name}
-                        className="h-full w-full p-1"
+                        title={item.name + "（单击加到中央，也可以拖到画布指定位置）"}
+                        className="h-full w-full cursor-grab p-1 active:cursor-grabbing"
                         onClick={() => {
                           addStickerOverlay(item.id);
                           setStickerAdded((current) => current + 1);
@@ -532,9 +543,14 @@ export default function LeftToolPanel({ onExportPng, onExportPdf, onExportZip }:
                     <button
                       key={def.id}
                       type="button"
+                      draggable
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData(STICKER_DND_MIME, def.id);
+                        event.dataTransfer.effectAllowed = "copy";
+                      }}
                       data-sticker-id={def.id}
-                      title={def.name}
-                      className="flex aspect-square items-center justify-center rounded-lg border border-[var(--line-soft)] bg-[var(--panel-1)] transition hover:border-cyan-300/70 hover:bg-cyan-500/10"
+                      title={def.name + "（单击加到中央，也可以拖到画布指定位置）"}
+                      className="flex aspect-square cursor-grab items-center justify-center rounded-lg border border-[var(--line-soft)] bg-[var(--panel-1)] transition hover:border-cyan-300/70 hover:bg-cyan-500/10 active:cursor-grabbing"
                       onClick={() => {
                         addStickerOverlay(def.id);
                         setStickerAdded((current) => current + 1);

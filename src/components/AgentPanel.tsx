@@ -8,6 +8,7 @@ import {
   compressReferenceImage,
   parseAgentPlan
 } from "../lib/agent";
+import { AgentSkill, getAgentSkill, suggestSkillsFor } from "../lib/agentSkills";
 import { useEditorStore } from "../lib/store";
 
 type ProviderPreset = {
@@ -46,6 +47,8 @@ type Entry = {
   applied?: string[];
   actionErrors?: string[];
   hasImage?: boolean;
+  // 这一轮实际启用了哪些内置排版技能
+  skills?: string[];
 };
 
 const QUICK_TASKS = [
@@ -182,37 +185,59 @@ export default function AgentPanel() {
             : { role: "assistant", content: entry.text }
         );
 
-      const response = await fetch("/api/agent/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [
-            { role: "system", content: buildSystemPrompt(context, config?.systemPromptExtra) },
-            ...recent,
-            {
-              role: "user",
-              // 带参考图时用多模态内容数组，视觉模型才能看到版面
-              content: attachedImage
-                ? [
+      const askModel = async (skills: AgentSkill[]) => {
+        const response = await fetch("/api/agent/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: [
+              { role: "system", content: buildSystemPrompt(context, config?.systemPromptExtra, skills) },
+              ...recent,
+              {
+                role: "user",
+                // 带参考图时用多模态内容数组，视觉模型才能看到版面
+                content: attachedImage
+                  ? [
                     { type: "text", text: trimmed },
                     { type: "image_url", image_url: { url: attachedImage } }
                   ]
-                : trimmed
-            }
-          ]
-        })
-      });
+                  : trimmed
+              }
+            ]
+          })
+        });
 
-      const payload = await response.json();
-      if (!response.ok || !payload?.ok) {
-        setEntries((current) => [
-          ...current,
-          { id: uuidv4(), role: "error", text: payload?.error ?? "请求失败" }
-        ]);
-        return;
+        const payload = await response.json();
+        if (!response.ok || !payload?.ok) {
+          throw new Error(payload?.error ?? "请求失败");
+        }
+        return String(payload.content ?? "");
+      };
+
+      // 先按关键词预加载最相关的技能正文，让模型一上来就拿着排版依据;模型自己也能再点名要，那就补一轮
+      let usedSkills = suggestSkillsFor(trimmed)
+        .map((id) => getAgentSkill(id))
+        .filter((skill): skill is AgentSkill => Boolean(skill))
+        .slice(0, 2);
+
+      let rawContent = await askModel(usedSkills);
+      let plan = parseAgentPlan(rawContent);
+
+      if (plan && plan.actions.length === 0 && plan.requestedSkills.length > 0) {
+        const requested = plan.requestedSkills
+          .map((id) => getAgentSkill(id))
+          .filter((skill): skill is AgentSkill => Boolean(skill));
+        const merged = [...usedSkills, ...requested]
+          .filter((skill, index, list) => list.findIndex((item) => item.id === skill.id) === index)
+          .slice(0, 3);
+
+        if (merged.length > usedSkills.length) {
+          usedSkills = merged;
+          rawContent = await askModel(usedSkills);
+          plan = parseAgentPlan(rawContent);
+        }
       }
 
-      const plan = parseAgentPlan(String(payload.content ?? ""));
       if (!plan) {
         setEntries((current) => [
           ...current,
@@ -220,7 +245,7 @@ export default function AgentPanel() {
             id: uuidv4(),
             role: "error",
             text: "模型返回的内容无法解析为操作计划，可以换个说法再试",
-            actionErrors: [String(payload.content ?? "").slice(0, 200)]
+            actionErrors: [rawContent.slice(0, 200)]
           }
         ]);
         return;
@@ -242,7 +267,8 @@ export default function AgentPanel() {
           role: "agent",
           text: plan.summary,
           applied: result.applied,
-          actionErrors: result.errors
+          actionErrors: result.errors,
+          skills: usedSkills.map((skill) => skill.name)
         }
       ]);
     } catch (caught) {
@@ -502,6 +528,12 @@ export default function AgentPanel() {
               ) : null}
               {entry.text}
             </p>
+
+            {entry.skills && entry.skills.length > 0 ? (
+              <p className="mt-1 text-[10px] leading-4 text-[var(--text-secondary)]">
+                已启用技能：{entry.skills.join(" · ")}
+              </p>
+            ) : null}
 
             {entry.applied && entry.applied.length > 0 ? (
               <ul className="mt-1 space-y-0.5">
