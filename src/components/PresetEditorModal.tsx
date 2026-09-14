@@ -296,7 +296,7 @@ export default function PresetEditorModal() {
       >
         <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">Preset Studio</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">预设编辑o</p>
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">编辑填字区域</h3>
           </div>
           <button type="button" className="studio-btn h-7 px-3 text-xs" onClick={closePresetEditor}>

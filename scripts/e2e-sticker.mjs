@@ -222,10 +222,12 @@ const readOverlayFields = () =>
     for (const label of document.querySelectorAll("aside label")) {
       const name = label.querySelector("span")?.innerText?.trim();
       const input = label.querySelector("input");
+      // 界面是中文，标签也是中文；映射回测试里用的英文键
+      const alias = { "x 坐标": "X", "y 坐标": "Y" }[(name ?? "").toLowerCase()] ?? name;
       if (name && input && typeof input.value === "string" && input.value !== "") {
         const numeric = Number(input.value);
         if (Number.isFinite(numeric)) {
-          values[name] = numeric;
+          values[alias] = numeric;
         }
       }
     }

@@ -92,6 +92,8 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
     setAllRounded(sample.borderRadius > 0);
     setAllRadius(sample.borderRadius);
     setAllCornerMode(sample.cornerMode === "chamfer" ? "chamfer" : "round");
+    // 半径跟着当前模式显示对应那个
+    setAllRadius(sample.cornerMode === "chamfer" ? sample.chamferRadius ?? 0 : sample.borderRadius);
     setAllBorderWidth(sample.borderWidth);
   }, [activePage.panels]);
 
@@ -244,7 +246,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                   >
                     <option value="A4">A4</option>
                     <option value="A3">A3</option>
-                    <option value="custom">Custom</option>
+                    <option value="custom">自定义</option>
                   </select>
                   <form className="flex items-center gap-2" onSubmit={applyCanvasSize}>
                     <input
@@ -437,7 +439,9 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                     className={primaryButtonClass}
                     onClick={() =>
                       setAllPanelsStyle({
-                        borderRadius: allRounded ? allRadius : 0,
+                        // 两种半径各存各的，按当前模式写对应的那个
+                        borderRadius: allCornerMode === "round" && allRounded ? allRadius : 0,
+                        chamferRadius: allCornerMode === "chamfer" && allRounded ? allRadius : 0,
                         cornerMode: allCornerMode,
                         borderWidth: allBorderWidth
                       })

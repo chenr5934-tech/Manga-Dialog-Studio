@@ -45,10 +45,13 @@ const readFields = () =>
     for (const label of document.querySelectorAll("aside label")) {
       const name = (label.querySelector("span")?.innerText ?? "").trim().toLowerCase();
       const input = label.querySelector("input");
+      // 界面是中文，标签也是中文；映射回测试里用的英文键
+      const alias =
+        { "宽度": "width", "高度": "height", "x 坐标": "x", "y 坐标": "y", "圆角半径": "radius", "倒角半径": "radius", "内边距": "padding" }[name] ?? name;
       if (name && input && typeof input.value === "string" && input.value !== "") {
         const numeric = Number(input.value);
         if (Number.isFinite(numeric)) {
-          values[name] = numeric;
+          values[alias] = numeric;
         }
       }
     }

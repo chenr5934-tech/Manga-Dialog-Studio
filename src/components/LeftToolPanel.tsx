@@ -316,7 +316,7 @@ export default function LeftToolPanel({
   return (
     <aside className="studio-surface flex h-full min-h-0 flex-col overflow-hidden">
       <div className="space-y-2.5 border-b border-[var(--line-soft)] px-2.5 py-2.5">
-        <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">Toolbox</p>
+        <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">工具箱</p>
 
         <div className="space-y-1.5">
           <p className={groupTitleClass}>扣选</p>

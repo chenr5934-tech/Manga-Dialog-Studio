@@ -81,7 +81,7 @@ const dragY = canvasBox.y + 400;
 // A) 先选中默认分镜，记录原始坐标
 await page.mouse.click(probeX, probeY);
 await sleep(700);
-const before = { x: await readPanelField("X"), y: await readPanelField("Y") };
+const before = { x: await readPanelField("X 坐标"), y: await readPanelField("Y 坐标") };
 record("可正常选中分镜并读到坐标", before.x !== null && before.y !== null, "X=" + before.x + " Y=" + before.y);
 const panelsBefore = await readPanelCount();
 
@@ -138,7 +138,7 @@ await sleep(700);
 // E) 回到同一位置点选原分镜，确认它没有被拖走
 await page.mouse.click(probeX, probeY);
 await sleep(700);
-const after = { x: await readPanelField("X"), y: await readPanelField("Y") };
+const after = { x: await readPanelField("X 坐标"), y: await readPanelField("Y 坐标") };
 record(
   "扣选期间已有分镜未被拖动",
   after.x === before.x && after.y === before.y,
@@ -152,7 +152,7 @@ await page.mouse.move(probeX + 16, probeY + 16, { steps: 3 });
 await page.mouse.move(probeX + 170, probeY + 150, { steps: 8 });
 await page.mouse.up();
 await sleep(800);
-const moved = { x: await readPanelField("X"), y: await readPanelField("Y") };
+const moved = { x: await readPanelField("X 坐标"), y: await readPanelField("Y 坐标") };
 record(
   "退出扣选后拖拽恢复正常",
   moved.x !== after.x || moved.y !== after.y,

@@ -184,7 +184,7 @@ export default function TemplateLibraryModal() {
       >
         <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">Layout Templates</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">版式模板ates</p>
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">整册版式模板</h3>
           </div>
           <div className="flex shrink-0 items-center gap-2">

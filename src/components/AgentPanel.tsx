@@ -310,7 +310,7 @@ export default function AgentPanel() {
     >
       <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-3 py-2.5">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">Agent</p>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">智能排版</p>
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">自动排版</h3>
         </div>
         <div className="flex items-center gap-1.5">

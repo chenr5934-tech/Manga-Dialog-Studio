@@ -19,19 +19,20 @@ export function drawPanelPath(
   context: PathDrawingContext,
   panel: Pick<
     Panel,
-    "width" | "height" | "shape" | "borderRadius" | "cornerMode" | "points" | "shapeKind"
+    "width" | "height" | "shape" | "borderRadius" | "chamferRadius" | "cornerMode" | "points" | "shapeKind"
   >,
   inset = 0
 ) {
   const points = getInsetPanelLocalPoints(panel, inset);
-  const size = Math.max(0, panel.borderRadius - inset);
 
   if (panel.cornerMode === "chamfer") {
-    drawChamferedPolygonPath(context, points, size);
+    // 老项目没有单独的倒角半径，回落到圆角半径，行为不会突变
+    const chamfer = panel.chamferRadius ?? panel.borderRadius;
+    drawChamferedPolygonPath(context, points, Math.max(0, chamfer - inset));
     return;
   }
 
-  drawRoundedPolygonPath(context, points, size);
+  drawRoundedPolygonPath(context, points, Math.max(0, panel.borderRadius - inset));
 }
 
 export function getPanelImageLayout(panel: Panel, imageSize: ImageSize) {

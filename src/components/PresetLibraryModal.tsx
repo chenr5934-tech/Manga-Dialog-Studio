@@ -201,7 +201,7 @@ export default function PresetLibraryModal() {
       >
         <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">Preset Library</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">预设文件ry</p>
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">预设库文件夹</h3>
           </div>
           <div className="flex shrink-0 items-center gap-2">

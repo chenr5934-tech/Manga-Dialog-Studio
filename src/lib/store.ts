@@ -125,6 +125,7 @@ type EditorStore = {
   setCanvasSize: (width: number, height: number) => void;
   setAllPanelsStyle: (style: {
     borderRadius?: number;
+    chamferRadius?: number;
     cornerMode?: "round" | "chamfer";
     borderWidth?: number;
   }) => void;
@@ -1391,6 +1392,7 @@ function sanitizePanel(panel: Panel): Panel {
     shape: panel.shape,
     borderColor: panel.borderColor,
     borderRadius: Math.max(0, panel.borderRadius),
+    chamferRadius: Math.max(0, panel.chamferRadius ?? 0),
     cornerMode: panel.cornerMode === "chamfer" ? "chamfer" : "round",
     borderWidth: Math.max(0, panel.borderWidth),
     gap: Math.max(0, panel.gap),
@@ -2143,6 +2145,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           sanitizePanel({
             ...panel,
             borderRadius: style.borderRadius === undefined ? panel.borderRadius : style.borderRadius,
+            chamferRadius: style.chamferRadius === undefined ? panel.chamferRadius : style.chamferRadius,
             cornerMode: style.cornerMode === undefined ? panel.cornerMode : style.cornerMode,
             borderWidth: style.borderWidth === undefined ? panel.borderWidth : style.borderWidth
           })

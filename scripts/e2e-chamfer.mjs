@@ -65,10 +65,13 @@ const readPanelFields = () =>
       // 属性面板的标签被 CSS 转成大写，innerText 拿到的也是大写，统一转小写比对
       const name = (label.querySelector("span")?.innerText ?? "").trim().toLowerCase();
       const input = label.querySelector("input");
+      // 界面改成中文后，标签也是中文；这里映射回测试里用的英文键
+      const alias =
+        { "宽度": "width", "高度": "height", "x 坐标": "x", "y 坐标": "y", "圆角半径": "radius", "倒角半径": "radius", "内边距": "padding" }[name] ?? name;
       if (name && input && typeof input.value === "string" && input.value !== "") {
         const numeric = Number(input.value);
         if (Number.isFinite(numeric)) {
-          values[name] = numeric;
+          values[alias] = numeric;
         }
       }
     }
@@ -81,7 +84,8 @@ const setPanelNumber = (labelText, value) =>
       for (const label of document.querySelectorAll("aside label")) {
         const span = label.querySelector("span");
         const input = label.querySelector("input");
-        if (span && input && span.innerText.trim().toLowerCase() === name.toLowerCase()) {
+        // 用包含匹配："半径" 会命中当前模式显示的那个（圆角半径或倒角半径）
+      if (span && input && span.innerText.trim().toLowerCase().includes(name.toLowerCase())) {
           const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
           setter.call(input, String(next));
           input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -127,10 +131,11 @@ record(
 
 // 半径给足，倒角才看得出来
 const RADIUS = 90;
-await setPanelNumber("Radius", RADIUS);
+await setPanelNumber("半径", RADIUS);
 await sleep(700);
 const withRadius = await readPanelFields();
 record("倒角/圆角半径可以设置", withRadius["radius"] === RADIUS, "Radius=" + withRadius["radius"]);
+
 
 // 采样工具：把画布坐标换算成画布像素后取色
 // 判据：从分镜左上角沿 45° 对角线往外扫，量出"角点到分镜边界"的距离。
@@ -187,14 +192,14 @@ await page.evaluate(
 );
 
 // 直角作基准：没有切角时，边界紧贴角点
-await setPanelNumber("Radius", 0);
+await setPanelNumber("半径", 0);
 await sleep(700);
 await page.click('[data-corner-mode="round"]');
 await sleep(600);
 const sharpDistance = await page.evaluate(() => window.__cornerDistance(window.__cx, window.__cy));
 
 // 圆角模式
-await setPanelNumber("Radius", RADIUS);
+await setPanelNumber("半径", RADIUS);
 await sleep(700);
 await page.click('[data-corner-mode="round"]');
 await sleep(800);
@@ -287,7 +292,7 @@ await page.evaluate(() => {
   };
 });
 
-await setPanelNumber("Radius", 320);
+await setPanelNumber("半径", 320);
 await sleep(600);
 await page.click('[data-corner-mode="round"]');
 await sleep(900);
@@ -311,10 +316,10 @@ if (polyImageInput) {
   await polyImageInput.uploadFile(join(SHOT_DIR, "chamfer-poly-source.png"));
   await sleep(2500);
 }
-await setPanelNumber("Radius", 0);
+await setPanelNumber("半径", 0);
 await sleep(800);
 const polySharpShot = await page.evaluate(() => window.__snapshotCanvas());
-await setPanelNumber("Radius", 400);
+await setPanelNumber("半径", 400);
 await sleep(900);
 const polyRoundShot = await page.evaluate(() => window.__snapshotCanvas());
 const polyRoundDiff = await page.evaluate((a, b) => window.__countDiff(a, b), polySharpShot, polyRoundShot);
@@ -325,10 +330,10 @@ record(
 );
 
 // 与 Radius=0 的直角对比：倒角应当改变角部
-await setPanelNumber("Radius", 0);
+await setPanelNumber("半径", 0);
 await sleep(800);
 const polySharp = await page.evaluate(() => window.__snapshotCanvas());
-await setPanelNumber("Radius", 320);
+await setPanelNumber("半径", 320);
 await sleep(900);
 const polyChamferBig = await page.evaluate(() => window.__snapshotCanvas());
 const polyVsSharp = await page.evaluate((a, b) => window.__countDiff(a, b), polySharp, polyChamferBig);
@@ -394,16 +399,16 @@ const selectedIsRect = await page.evaluate(() => {
       values[span.innerText.trim().toLowerCase()] = input.value;
     }
   }
-  return values["x"] === "40" && values["width"] === "2400";
+  return values["x 坐标"] === "40" && values["宽度"] === "2400";
 });
 record("可以重新选中矩形分镜", selectedIsRect);
-await setPanelNumber("Radius", 120);
+await setPanelNumber("半径", 120);
 await sleep(500);
 await page.click('[data-corner-mode="chamfer"]');
 await sleep(700);
 
 // 先清掉内边距，取一个"边框之后直接是填充"的基线
-await setPanelNumber("Padding", 0);
+await setPanelNumber("内边距", 0);
 await sleep(800);
 const withoutPadding = await page.evaluate(() => window.__segments());
 const greenRuns = (value) => value.split(",").filter((part) => part === "绿").length;
@@ -413,7 +418,7 @@ record(
   withoutPadding
 );
 
-await setPanelNumber("Padding", 70);
+await setPanelNumber("内边距", 70);
 await sleep(900);
 const withPadding = await page.evaluate(() => window.__segments());
 record(
@@ -422,6 +427,46 @@ record(
   withoutPadding + "   →   " + withPadding
 );
 await page.screenshot({ path: SHOT_DIR + "/padding-visible.png" });
+
+// 圆角和倒角各存各的半径：切过去会沿用对方的值，但改一个不该覆盖另一个
+await page.click('[data-corner-mode="round"]');
+await sleep(500);
+await setPanelNumber("半径", 120);
+await sleep(600);
+const roundBefore = (await readPanelFields())["radius"];
+
+await page.click('[data-corner-mode="chamfer"]');
+await sleep(700);
+const chamferInherited = (await readPanelFields())["radius"];
+record(
+  "切到倒角会沿用圆角半径，不会突然归零",
+  chamferInherited === roundBefore,
+  "圆角=" + roundBefore + " 倒角=" + chamferInherited
+);
+
+await setPanelNumber("半径", 300);
+await sleep(700);
+await page.click('[data-corner-mode="round"]');
+await sleep(700);
+const roundAfter = (await readPanelFields())["radius"];
+record(
+  "改倒角半径不会覆盖圆角半径",
+  roundAfter === roundBefore,
+  "圆角 " + roundBefore + " → " + roundAfter
+);
+
+await page.click('[data-corner-mode="chamfer"]');
+await sleep(700);
+const chamferAfter = (await readPanelFields())["radius"];
+record("倒角半径自己保持不变", chamferAfter === 300, "倒角=" + chamferAfter);
+
+// 复位，后面的直角基准要从 0 开始
+await page.click('[data-corner-mode="round"]');
+await sleep(500);
+await setPanelNumber("半径", 0);
+await sleep(700);
+await setPanelNumber("内边距", 0);
+await sleep(700);
 
 record("运行期无控制台错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 

@@ -73,11 +73,12 @@ export function createCanvasFromPreset(preset: CanvasPreset = "A4"): CanvasConfi
 
 const DEFAULT_PANEL_STYLE: Pick<
   Panel,
-  "borderColor" | "borderRadius" | "borderWidth" | "cornerMode" | "gap" | "rotation" | "shape"
+  "borderColor" | "borderRadius" | "chamferRadius" | "borderWidth" | "cornerMode" | "gap" | "rotation" | "shape"
 > = {
   borderWidth: 4,
   borderColor: "#111827",
   borderRadius: 0,
+  chamferRadius: 0,
   cornerMode: "round",
   gap: 0,
   rotation: 0,
@@ -97,6 +98,7 @@ export function createPanel(input: Pick<Panel, "x" | "y" | "width" | "height"> &
     shape: normalizePanelShape(input.shape ?? DEFAULT_PANEL_STYLE.shape, width),
     borderColor: input.borderColor ?? DEFAULT_PANEL_STYLE.borderColor,
     borderRadius: input.borderRadius ?? DEFAULT_PANEL_STYLE.borderRadius,
+    chamferRadius: input.chamferRadius ?? DEFAULT_PANEL_STYLE.chamferRadius,
     cornerMode: input.cornerMode ?? DEFAULT_PANEL_STYLE.cornerMode,
     borderWidth: input.borderWidth ?? DEFAULT_PANEL_STYLE.borderWidth,
     gap: input.gap ?? DEFAULT_PANEL_STYLE.gap,

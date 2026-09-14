@@ -132,7 +132,7 @@ export default function BackgroundRemoverModal({
       >
         <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">Background</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">背景处理</p>
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">去除同色背景</h3>
           </div>
           <button type="button" className="studio-btn h-7 px-3 text-xs" onClick={onClose}>

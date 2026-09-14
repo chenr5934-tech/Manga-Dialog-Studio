@@ -190,7 +190,7 @@ await sleep(900);
 await clickByText("退出扣选");
 await sleep(700);
 
-const sizeBefore = { w: await readPanelField("Width"), h: await readPanelField("Height") };
+const sizeBefore = { w: await readPanelField("宽度"), h: await readPanelField("高度") };
 record("多边形分镜已创建并可读取尺寸", sizeBefore.w !== null, "W=" + sizeBefore.w + " H=" + sizeBefore.h);
 
 // 退出取景后提示条消失、画布会上移，必须重新测量位置
@@ -210,7 +210,7 @@ await sleep(200);
 await page.mouse.up();
 await sleep(900);
 
-const sizeAfter = { w: await readPanelField("Width"), h: await readPanelField("Height") };
+const sizeAfter = { w: await readPanelField("宽度"), h: await readPanelField("高度") };
 record(
   "拖动多边形顶点会改变分镜形状",
   sizeAfter.w !== sizeBefore.w || sizeAfter.h !== sizeBefore.h,

@@ -721,7 +721,7 @@ function VisualCropModal({ panel, open, onClose }: { panel: Panel; open: boolean
       <div className="studio-surface relative w-full max-w-6xl p-4 md:p-5" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">Crop Editor</p>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">裁剪编辑</p>
             <h4 className="text-base font-semibold text-[var(--text-primary)]">图像手动裁剪</h4>
           </div>
           <button className={buttonClass} onClick={onClose}>
@@ -846,23 +846,23 @@ function CropEditor({ panel }: { panel: Panel }) {
         原图尺寸: {naturalWidth} x {naturalHeight}
       </p>
 
-      <NumberField label="Crop X" value={crop.x} min={0} onChange={(value) => update({ x: value })} />
-      <NumberField label="Crop Y" value={crop.y} min={0} onChange={(value) => update({ y: value })} />
+      <NumberField label="裁剪 X" value={crop.x} min={0} onChange={(value) => update({ x: value })} />
+      <NumberField label="裁剪 Y" value={crop.y} min={0} onChange={(value) => update({ y: value })} />
       <NumberField
-        label="Crop Width"
+        label="裁剪宽度"
         value={crop.width}
         min={1}
         max={naturalWidth}
         onChange={(value) => update({ width: value })}
       />
       <NumberField
-        label="Crop Height"
+        label="裁剪高度"
         value={crop.height}
         min={1}
         max={naturalHeight}
         onChange={(value) => update({ height: value })}
       />
-      <NumberField label="Scale" value={crop.scale} min={0.1} max={4} step={0.05} onChange={(value) => update({ scale: value })} />
+      <NumberField label="裁剪缩放" value={crop.scale} min={0.1} max={4} step={0.05} onChange={(value) => update({ scale: value })} />
 
       <button className={buttonClass} onClick={() => resetPanelCrop(panel.id)}>
         重置裁剪
@@ -935,21 +935,35 @@ function PanelInspector({ panel }: { panel: Panel }) {
       <div className={sectionClass}>
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">分镜属性</h3>
-          <span className="studio-chip px-2.5 py-1 text-[11px]">Panel</span>
+          <span className="studio-chip px-2.5 py-1 text-[11px]">分镜</span>
         </div>
-        <NumberField label="X" value={panel.x} onChange={patch("x") as (v: number) => void} />
-        <NumberField label="Y" value={panel.y} onChange={patch("y") as (v: number) => void} />
-        <NumberField label="Width" value={panel.width} min={24} onChange={patch("width") as (v: number) => void} />
-        <NumberField label="Height" value={panel.height} min={24} onChange={patch("height") as (v: number) => void} />
+        <NumberField label="X 坐标" value={panel.x} onChange={patch("x") as (v: number) => void} />
+        <NumberField label="Y 坐标" value={panel.y} onChange={patch("y") as (v: number) => void} />
+        <NumberField label="宽度" value={panel.width} min={24} onChange={patch("width") as (v: number) => void} />
+        <NumberField label="高度" value={panel.height} min={24} onChange={patch("height") as (v: number) => void} />
         <NumberField
-          label="Tilt"
+          label="倾斜"
           value={panelRotation}
           min={-180}
           max={180}
           onChange={(value) => patch("rotation")(normalizePanelRotation(value))}
         />
-        <NumberField label="BorderWidth" value={panel.borderWidth} min={0} onChange={patch("borderWidth") as (v: number) => void} />
-        <NumberField label="Radius" value={panel.borderRadius} min={0} onChange={patch("borderRadius") as (v: number) => void} />
+        <NumberField label="边框粗细" value={panel.borderWidth} min={0} onChange={patch("borderWidth") as (v: number) => void} />
+        {(panel.cornerMode ?? "round") === "chamfer" ? (
+          <NumberField
+            label="倒角半径"
+            value={panel.chamferRadius ?? 0}
+            min={0}
+            onChange={patch("chamferRadius") as (v: number) => void}
+          />
+        ) : (
+          <NumberField
+            label="圆角半径"
+            value={panel.borderRadius}
+            min={0}
+            onChange={patch("borderRadius") as (v: number) => void}
+          />
+        )}
         <div className="space-y-1.5">
           <span className={labelClass}>角的处理</span>
           <div className="flex flex-wrap gap-2">
@@ -957,7 +971,13 @@ function PanelInspector({ panel }: { panel: Panel }) {
               type="button"
               data-corner-mode="round"
               className={getToggleButtonClass((panel.cornerMode ?? "round") === "round")}
-              onClick={() => patch("cornerMode")("round")}
+              onClick={() => {
+                const nextRound =
+                  panel.borderRadius === 0 && (panel.chamferRadius ?? 0) > 0
+                    ? panel.chamferRadius ?? 0
+                    : panel.borderRadius;
+                updatePanel(panel.id, { cornerMode: "round", borderRadius: nextRound });
+              }}
               title="圆角：四个角用圆弧过渡，半径取上面的 Radius"
             >
               圆角
@@ -966,7 +986,15 @@ function PanelInspector({ panel }: { panel: Panel }) {
               type="button"
               data-corner-mode="chamfer"
               className={getToggleButtonClass(panel.cornerMode === "chamfer")}
-              onClick={() => patch("cornerMode")("chamfer")}
+              onClick={() => {
+                // 第一次切到倒角时，如果倒角半径还是 0，就沿用圆角的数值，
+                // 否则切过去什么都没变，会以为功能没生效。
+                const nextChamfer =
+                  (panel.chamferRadius ?? 0) === 0 && panel.borderRadius > 0
+                    ? panel.borderRadius
+                    : panel.chamferRadius ?? 0;
+                updatePanel(panel.id, { cornerMode: "chamfer", chamferRadius: nextChamfer });
+              }}
               title="倒角：用一条直线把角切掉，转折是直角切面。半径同样取上面的 Radius"
             >
               倒角
@@ -977,7 +1005,7 @@ function PanelInspector({ panel }: { panel: Panel }) {
             另外填充色和页面底色相同时，只看得到边框的角在变，给分镜放张图或换个底图色会更清楚。
           </p>
         </div>
-        <NumberField label="Padding" value={panel.gap} min={0} onChange={patch("gap") as (v: number) => void} />
+        <NumberField label="内边距" value={panel.gap} min={0} onChange={patch("gap") as (v: number) => void} />
         <p className="text-[11px] leading-4 text-[var(--text-secondary)]">
           内边距：边框与画面内容之间留出的空隙，会露出页面底色。注意它和「切割画布」里分镜之间的间距不是一回事。
         </p>
@@ -1025,7 +1053,7 @@ function PanelInspector({ panel }: { panel: Panel }) {
         <div className={sectionClass}>
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">多边形分镜</h3>
-            <span className="studio-chip px-2.5 py-1 text-[11px]">Polygon</span>
+            <span className="studio-chip px-2.5 py-1 text-[11px]">多边形</span>
           </div>
 
           <p className="text-xs text-[var(--text-secondary)]">
@@ -1039,7 +1067,7 @@ function PanelInspector({ panel }: { panel: Panel }) {
       <div className={sectionClass}>
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">斜切</h3>
-          <span className="studio-chip px-2.5 py-1 text-[11px]">Skew</span>
+          <span className="studio-chip px-2.5 py-1 text-[11px]">斜切</span>
         </div>
 
         <p className="text-xs text-[var(--text-secondary)]">
@@ -1047,15 +1075,15 @@ function PanelInspector({ panel }: { panel: Panel }) {
         </p>
         <p className="text-xs text-[var(--text-secondary)]">支持负值和超过 100% 的数值，这样就能把边角向外扩出去。</p>
 
-        <ShapePercentField label="Top Left" value={panelShape.topLeft} onChange={(value) => updateShape({ topLeft: value })} />
-        <ShapePercentField label="Top Right" value={panelShape.topRight} onChange={(value) => updateShape({ topRight: value })} />
+        <ShapePercentField label="左上" value={panelShape.topLeft} onChange={(value) => updateShape({ topLeft: value })} />
+        <ShapePercentField label="右上" value={panelShape.topRight} onChange={(value) => updateShape({ topRight: value })} />
         <ShapePercentField
-          label="Bottom Right"
+          label="右下"
           value={panelShape.bottomRight}
           onChange={(value) => updateShape({ bottomRight: value })}
         />
         <ShapePercentField
-          label="Bottom Left"
+          label="左下"
           value={panelShape.bottomLeft}
           onChange={(value) => updateShape({ bottomLeft: value })}
         />
@@ -1073,7 +1101,7 @@ function PanelInspector({ panel }: { panel: Panel }) {
       <div className={sectionClass}>
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">图像来源</h3>
-          <span className="studio-chip px-2.5 py-1 text-[11px]">Image</span>
+          <span className="studio-chip px-2.5 py-1 text-[11px]">图像</span>
         </div>
 
         <input
@@ -1152,7 +1180,7 @@ function BubbleInspector({ bubble }: { bubble: Bubble }) {
       <div className={sectionClass}>
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">文字属性</h3>
-          <span className="studio-chip px-2.5 py-1 text-[11px]">Text</span>
+          <span className="studio-chip px-2.5 py-1 text-[11px]">文字</span>
         </div>
         <p className="text-xs leading-5 text-[var(--text-secondary)]">点击画布上的文字框后，可以在这里切换形状、背景、边框和排版方向。</p>
       </div>
@@ -1289,8 +1317,8 @@ function BubbleInspector({ bubble }: { bubble: Bubble }) {
           />
         </label>
 
-        <NumberField label="X" value={bubble.x} onChange={(value) => patch({ x: value })} />
-        <NumberField label="Y" value={bubble.y} onChange={(value) => patch({ y: value })} />
+        <NumberField label="X 坐标" value={bubble.x} onChange={(value) => patch({ x: value })} />
+        <NumberField label="Y 坐标" value={bubble.y} onChange={(value) => patch({ y: value })} />
         <SizeSliderField label="宽度" value={bubble.width} onChange={(value) => patch({ width: value })} />
         <SizeSliderField label="高度" value={bubble.height} onChange={(value) => patch({ height: value })} />
       </div>
@@ -1358,8 +1386,8 @@ function OverlayInspector({ overlay }: { overlay: OverlayImage }) {
       </div>
 
       <div className={sectionClass}>
-        <NumberField label="X" value={overlay.x} onChange={(value) => updateOverlay(overlay.id, { x: value })} />
-        <NumberField label="Y" value={overlay.y} onChange={(value) => updateOverlay(overlay.id, { y: value })} />
+        <NumberField label="X 坐标" value={overlay.x} onChange={(value) => updateOverlay(overlay.id, { x: value })} />
+        <NumberField label="Y 坐标" value={overlay.y} onChange={(value) => updateOverlay(overlay.id, { y: value })} />
         <NumberField
           label="宽度"
           value={overlay.width}
@@ -1476,7 +1504,6 @@ export default function InspectorPanel() {
   return (
     <aside className={containerClass}>
       <div className="mb-4">
-        <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">Inspector</p>
         <h2 className="text-lg font-semibold text-[var(--text-primary)]">属性检查器</h2>
       </div>
 

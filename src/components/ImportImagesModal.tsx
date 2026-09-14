@@ -145,7 +145,7 @@ export default function ImportImagesModal() {
       >
         <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">Import Pages</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">导入原稿</p>
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">导入漫画原稿</h3>
           </div>
           <button type="button" className="studio-btn h-7 px-3 text-xs" onClick={closeImportDialog}>
