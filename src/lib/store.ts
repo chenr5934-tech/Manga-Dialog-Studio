@@ -148,6 +148,8 @@ type EditorStore = {
     image: string;
     naturalWidth: number;
     naturalHeight: number;
+    // 拖拽投放时的中心点；不传则居中
+    anchor?: { x: number; y: number };
   }) => void;
   updateOverlay: (id: string, patch: Partial<OverlayImage>) => void;
   deleteOverlay: (id: string) => void;
@@ -201,9 +203,12 @@ type EditorStore = {
   setPanelCrop: (id: string, crop: CropConfig) => void;
   resetPanelCrop: (id: string) => void;
   uploadLocalImageForPanel: (id: string, file: File) => Promise<void>;
+  // 用项目里已有的图片直接填进分镜，不重新上传
+  applyImageToPanel: (id: string, image: NonNullable<Panel["image"]>) => void;
 
   saveProject: () => Promise<void>;
   saveProjectAs: () => Promise<void>;
+  exportProjectFile: () => Promise<void>;
   loadProject: () => Promise<void>;
 };
 
@@ -2595,7 +2600,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  addOverlayImage: ({ image, naturalWidth, naturalHeight }) => {
+  addOverlayImage: ({ image, naturalWidth, naturalHeight, anchor }) => {
     set((state) => {
       const activePage = getActivePage(state.project);
       const canvas = activePage.canvas;
@@ -2608,8 +2613,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
       const overlay: OverlayImage = {
         id: uuidv4(),
-        x: Math.round((canvas.width - width) / 2),
-        y: Math.round((canvas.height - height) / 2),
+        x: anchor ? Math.round(anchor.x - width / 2) : Math.round((canvas.width - width) / 2),
+        y: anchor ? Math.round(anchor.y - height / 2) : Math.round((canvas.height - height) / 2),
         width,
         height,
         rotation: 0,
@@ -3553,6 +3558,41 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
   },
 
+
+  // 把项目里已有的图片直接填进分镜，走的是和「导入本地图片」同一条落盘逻辑，
+  // 区别只在于不重新上传：图片数据已经在项目里了。
+  applyImageToPanel: (id, image) => {
+    set((state) => {
+      if (!findPanel(state.project, id)) {
+        return {
+          ...withNotice(state, "找不到分镜")
+        };
+      }
+
+      const nextProject = updateProjectPanelById(state.project, id, (entry) => ({
+        ...entry,
+        image: {
+          ...image,
+          crop: undefined
+        }
+      }));
+
+      if (!nextProject) {
+        return state;
+      }
+
+      const historyState = withHistory(state, nextProject, "已把图片放进分镜");
+      if (!historyState) {
+        return state;
+      }
+
+      return {
+        ...historyState,
+        ...withNotice(historyState, "已把图片放进分镜")
+      };
+    });
+  },
+
   saveProject: async () => {
     await runSaveProjectFlow(set, get, {
       forcePickDirectory: false
@@ -3563,6 +3603,34 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     await runSaveProjectFlow(set, get, {
       forcePickDirectory: true
     });
+  },
+
+  // 把当前作品打包成一个自包含的 JSON 下载下来，图片与历史都内嵌在文件里，
+  // 下次用「加载项目」打开就能接着改。
+  exportProjectFile: async () => {
+    set((state) => ({
+      ...withNotice(state, "正在打包当前作品...")
+    }));
+
+    try {
+      const state = get();
+      const materialized = await materializeProjectAssetsForFileExport(
+        createPersistedProjectDocument(state),
+        state.projectDirectoryHandle
+      );
+      const downloadFilename = createProjectDownloadFilename(state.project.name);
+      triggerJsonDownload(downloadFilename, materialized.document);
+
+      if (materialized.unresolvedRefs.length > 0) {
+        get().setNotice(
+          "已导出 " + downloadFilename + "，但有 " + materialized.unresolvedRefs.length + " 张图片未能内嵌"
+        );
+      } else {
+        get().setNotice("已导出 " + downloadFilename + "（图片与编辑历史都已内嵌）");
+      }
+    } catch (error) {
+      get().setNotice(error instanceof Error ? error.message : "导出未完成作品失败");
+    }
   },
 
   loadProject: async () => {

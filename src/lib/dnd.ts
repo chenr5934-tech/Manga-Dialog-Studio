@@ -1,6 +1,7 @@
 // 预设拖拽使用自定义 MIME，避免与文件拖入混淆
 export const PRESET_DND_MIME = "application/x-manga-dialog-preset";
 export const STICKER_DND_MIME = "application/x-manga-dialog-sticker";
+export const POOLED_IMAGE_DND_MIME = "application/x-manga-dialog-pooled-image";
 export const IMAGE_FILE_ACCEPT = "image/png,image/jpeg,image/webp,image/gif,image/svg+xml,image/avif";
 
 export function readImageFileAsDataUrl(file: File): Promise<string> {

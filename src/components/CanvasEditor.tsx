@@ -24,7 +24,9 @@ import {
 } from "../lib/panelGeometry";
 import { drawPanelPath, getPanelImageLayout } from "../lib/panelRender";
 import { DEFAULT_BACKDROP_COLOR, normalizeBubbleSize } from "../lib/project";
-import { PRESET_DND_MIME, STICKER_DND_MIME } from "../lib/dnd";
+import { POOLED_IMAGE_DND_MIME, PRESET_DND_MIME, STICKER_DND_MIME } from "../lib/dnd";
+import { findPooledImage } from "../lib/imagePool";
+import { isPointInsidePanel } from "../lib/panelGeometry";
 import { getActivePage, useEditorStore } from "../lib/store";
 import { BubbleShapeLayer, BubbleTextLayer, resolveBubbleOpacity } from "./BubbleVisual";
 
@@ -515,6 +517,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
   const updateBubble = useEditorStore((state) => state.updateBubble);
   const createPanelFromRect = useEditorStore((state) => state.createPanelFromRect);
   const addStickerOverlay = useEditorStore((state) => state.addStickerOverlay);
+  const addOverlayImage = useEditorStore((state) => state.addOverlayImage);
+  const applyImageToPanel = useEditorStore((state) => state.applyImageToPanel);
   const createEllipsePanelFromRect = useEditorStore((state) => state.createEllipsePanelFromRect);
   const addBubbleFromPreset = useEditorStore((state) => state.addBubbleFromPreset);
   const toggleManualPanelMode = useEditorStore((state) => state.toggleManualPanelMode);
@@ -1165,16 +1169,18 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
             onDragOver={(event) => {
               if (
                 event.dataTransfer.types.includes(PRESET_DND_MIME) ||
-                event.dataTransfer.types.includes(STICKER_DND_MIME)
+                event.dataTransfer.types.includes(STICKER_DND_MIME) ||
+                event.dataTransfer.types.includes(POOLED_IMAGE_DND_MIME)
               ) {
                 event.preventDefault();
                 event.dataTransfer.dropEffect = "copy";
               }
             }}
             onDrop={(event) => {
+              const pooledId = event.dataTransfer.getData(POOLED_IMAGE_DND_MIME);
               const stickerId = event.dataTransfer.getData(STICKER_DND_MIME);
               const presetId = event.dataTransfer.getData(PRESET_DND_MIME);
-              if (!stickerId && !presetId) {
+              if (!pooledId && !stickerId && !presetId) {
                 return;
               }
 
@@ -1188,6 +1194,41 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
               // 贴纸拖进来时以指针为中心落下，和气泡预设的投放行为一致
               if (stickerId) {
                 addStickerOverlay(stickerId, undefined, scenePoint);
+                return;
+              }
+
+              // 图片池拖进来：落在某个分镜上先问一句，落在空白则在上层新建一张图片
+              if (pooledId) {
+                const liveProject = useEditorStore.getState().project;
+                const livePage = getActivePage(liveProject);
+                const pooled = findPooledImage(liveProject, pooledId);
+                if (!pooled) {
+                  return;
+                }
+
+                // 后加的在上层，所以从后往前找，命中的就是视觉上盖在最上面的那一格
+                const target = [...livePage.panels]
+                  .reverse()
+                  .find((panel) => isPointInsidePanel(panel, scenePoint));
+
+                if (
+                  target &&
+                  window.confirm("把这张图片放进这个分镜吗？\n\n选「取消」则改为在画布上层新建一张图片。")
+                ) {
+                  applyImageToPanel(target.id, {
+                    original: pooled.src,
+                    naturalWidth: pooled.naturalWidth ?? 1,
+                    naturalHeight: pooled.naturalHeight ?? 1
+                  });
+                  return;
+                }
+
+                addOverlayImage({
+                  image: pooled.src,
+                  naturalWidth: pooled.naturalWidth ?? 1,
+                  naturalHeight: pooled.naturalHeight ?? 1,
+                  anchor: scenePoint
+                });
                 return;
               }
 

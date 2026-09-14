@@ -124,6 +124,46 @@ export function rotatePointAround(point: Point, center: Point, rotation?: number
   };
 }
 
+
+// 画布点反变换到分镜局部坐标，用于判断投放落在哪个格子里
+export function getPanelLocalPoint(
+  panel: Pick<Panel, "x" | "y" | "width" | "height" | "rotation">,
+  canvasPoint: Point
+): Point {
+  const unrotated = rotatePointAround(
+    canvasPoint,
+    getPanelCenter(panel),
+    -normalizePanelRotation(panel.rotation)
+  );
+  return {
+    x: unrotated.x - panel.x,
+    y: unrotated.y - panel.y
+  };
+}
+
+// 标准射线法：奇数个交点即在多边形内
+function pointInPolygon(point: Point, polygon: Point[]): boolean {
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index, index += 1) {
+    const current = polygon[index];
+    const last = polygon[previous];
+    const intersects =
+      current.y > point.y !== last.y > point.y &&
+      point.x < ((last.x - current.x) * (point.y - current.y)) / (last.y - current.y) + current.x;
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+// 判断画布上的某个点是否落在这个分镜里。矩形、多边形、椭圆都走点集，口径一致。
+export function isPointInsidePanel(panel: Panel, canvasPoint: Point): boolean {
+  const local = getPanelLocalPoint(panel, canvasPoint);
+  const points = getPanelLocalPoints(panel);
+  return points.length >= 3 && pointInPolygon(local, points);
+}
+
 // 椭圆用点集近似，这样渲染、裁剪、命中都能沿用现有多边形链路
 export const ELLIPSE_POINT_COUNT = 48;
 

@@ -3,21 +3,24 @@ import { v4 as uuidv4 } from "uuid";
 import { BubblePreset } from "../types";
 import {
   IMAGE_FILE_ACCEPT,
+  POOLED_IMAGE_DND_MIME,
   PRESET_DND_MIME,
   STICKER_DND_MIME,
   loadImageElement,
   readImageFileAsDataUrl
 } from "../lib/dnd";
+import { collectProjectImages } from "../lib/imagePool";
 import { normalizePreset } from "../lib/presets";
 import { getActivePage, useEditorStore } from "../lib/store";
 import { StickerDef, listStickerGroups, normalizeCustomStickers } from "../lib/stickers";
 
-type ContentMode = "presets" | "stickers" | "export";
+type ContentMode = "presets" | "stickers" | "images" | "export";
 
 type LeftToolPanelProps = {
   onExportPng: () => Promise<void>;
   onExportPdf: () => Promise<void>;
   onExportZip: (pixelRatio: number) => Promise<void>;
+  onExportProject: () => Promise<void>;
 };
 
 type LibraryFile = { name: string; count: number; detail: string; modified: number };
@@ -71,7 +74,12 @@ function StickerPreview({ def }: { def: StickerDef }) {
   );
 }
 
-export default function LeftToolPanel({ onExportPng, onExportPdf, onExportZip }: LeftToolPanelProps) {
+export default function LeftToolPanel({
+  onExportPng,
+  onExportPdf,
+  onExportZip,
+  onExportProject
+}: LeftToolPanelProps) {
   const bubblePresets = useEditorStore((state) => state.bubblePresets);
   const project = useEditorStore((state) => state.project);
   const activePage = useEditorStore((state) => getActivePage(state.project));
@@ -109,6 +117,7 @@ export default function LeftToolPanel({ onExportPng, onExportPdf, onExportZip }:
   const stickerInputRef = useRef<HTMLInputElement | null>(null);
 
   const stickerGroups = listStickerGroups();
+  const pooledImages = collectProjectImages(project);
   const customGroupName = "自定义";
   const activeStickerGroup = stickerGroup || stickerGroups[0]?.name || "";
 
@@ -428,6 +437,15 @@ export default function LeftToolPanel({ onExportPng, onExportPdf, onExportZip }:
             >
               对话框预设
             </button>
+            <button
+              type="button"
+              data-tool="images"
+              className={toolButtonClass + (contentMode === "images" ? " studio-btn-primary" : "")}
+              onClick={() => setContentMode("images")}
+              title="项目里已经导入过的图片，可以拖进分镜或拖到画布上层"
+            >
+              已导入图片 {pooledImages.length > 0 ? "(" + pooledImages.length + ")" : ""}
+            </button>
           </div>
         </div>
       </div>
@@ -575,6 +593,42 @@ export default function LeftToolPanel({ onExportPng, onExportPdf, onExportZip }:
           </div>
         ) : null}
 
+        {contentMode === "images" ? (
+          <div className="space-y-2.5" data-image-pool="1">
+            <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
+              拖到<span className="text-[var(--text-primary)]">分镜</span>上会问你是否放进该格子；
+              拖到<span className="text-[var(--text-primary)]">空白处</span>则在上层新建一张图片，可以自由调大小。
+            </p>
+
+            {pooledImages.length === 0 ? (
+              <p className="py-4 text-center text-[11px] leading-5 text-[var(--text-secondary)]">
+                还没有图片。
+                <br />
+                导入漫画原稿、或给分镜放进图片之后，它们会出现在这里。
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 gap-1.5">
+                {pooledImages.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    draggable
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData(POOLED_IMAGE_DND_MIME, item.id);
+                      event.dataTransfer.effectAllowed = "copy";
+                    }}
+                    data-pooled-image={item.id}
+                    title={item.label + "（" + item.detail + "）"}
+                    className="flex aspect-square cursor-grab items-center justify-center overflow-hidden rounded-lg border border-[var(--line-soft)] bg-[var(--panel-1)] transition hover:border-cyan-300/70 active:cursor-grabbing"
+                  >
+                    <img src={item.src} alt={item.label} className="h-full w-full object-cover" draggable={false} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
+
         {contentMode === "export" ? (
           <div className="space-y-3">
             <p className={groupTitleClass}>导出</p>
@@ -604,6 +658,22 @@ export default function LeftToolPanel({ onExportPng, onExportPdf, onExportZip }:
                 ))}
               </div>
               <p className="text-[10px] leading-4 text-[var(--text-secondary)]">每页一张 PNG，按 001、002 序号命名</p>
+            </div>
+
+            <div className="space-y-1.5 border-t border-[var(--line-soft)] pt-3">
+              <p className={groupTitleClass}>接续编辑</p>
+              <button
+                type="button"
+                data-export-project="1"
+                className={toolButtonClass + " w-full studio-btn-primary"}
+                onClick={() => void onExportProject()}
+                title="把当前作品打包成一个自包含文件下载下来，图片与编辑历史都内嵌其中；下次用「加载项目」打开就能接着改"
+              >
+                导出未完成作品
+              </button>
+              <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
+                保存目前所有改动（含图片与编辑历史）成一个文件，方便下次接着编辑。
+              </p>
             </div>
           </div>
         ) : null}
@@ -663,6 +733,12 @@ export default function LeftToolPanel({ onExportPng, onExportPdf, onExportZip }:
         {contentMode === "export" ? (
           <p className="px-0.5 text-[10px] leading-4 text-[var(--text-secondary)]">
             导出会把当前选中状态与辅助线一并排除，只输出画面内容。
+          </p>
+        ) : null}
+
+        {contentMode === "images" ? (
+          <p className="px-0.5 text-[10px] leading-4 text-[var(--text-secondary)]">
+            图片池收录项目里用过的每一张图，自动去重。拖拽即可复用，不需要重新导入。
           </p>
         ) : null}
       </div>

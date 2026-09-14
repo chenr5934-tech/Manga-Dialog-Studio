@@ -48,6 +48,11 @@ export default function App() {
     await canvasEditorRef.current.exportPngZip(pixelRatio);
   }, []);
 
+  // 未完成作品走 store：它要把图片与编辑历史一起打包成自包含文件
+  const exportProject = useCallback(async () => {
+    await useEditorStore.getState().exportProjectFile();
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -125,7 +130,12 @@ export default function App() {
 
         <section className="grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[260px_minmax(640px,1fr)_336px_124px]">
           <div className="min-h-0">
-            <LeftToolPanel onExportPng={exportPng} onExportPdf={exportPdf} onExportZip={exportZip} />
+            <LeftToolPanel
+              onExportPng={exportPng}
+              onExportPdf={exportPdf}
+              onExportZip={exportZip}
+              onExportProject={exportProject}
+            />
           </div>
 
           <div className="min-h-0">
