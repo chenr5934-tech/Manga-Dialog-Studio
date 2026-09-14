@@ -363,6 +363,113 @@ record(
   rectStat ? "顶边跨度=" + rectStat.top.toFixed(2) + " 左边跨度=" + rectStat.left.toFixed(2) : "无数据"
 );
 
+// ---------- 4) 图片层是否真的进了导出图 ----------
+// 导出 PNG 走 data URL 锚点：无头模式虽然不落盘，但 href 可捕获，据此直接分析导出图像的像素
+await page.evaluate(() => {
+  window.__exportAnchors = [];
+  const originalClick = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function () {
+    window.__exportAnchors.push({ href: String(this.href), download: this.download });
+    return originalClick.call(this);
+  };
+});
+
+// 「分镜布局」是开关，已展开时再点会收起；只在面板缺失时才去展开
+if (!(await page.$("[data-add-overlay]"))) {
+  await clickByText("分镜布局");
+  await sleep(600);
+}
+const redCircle = await page.evaluate(async () => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 300;
+  canvas.height = 300;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#e01b1b";
+  ctx.beginPath();
+  ctx.arc(150, 150, 145, 0, Math.PI * 2);
+  ctx.fill();
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  const input = document.querySelector("[data-add-overlay]")?.parentElement?.querySelector('input[type="file"]');
+  if (!input) {
+    return "未找到输入";
+  }
+  const transfer = new DataTransfer();
+  transfer.items.add(new File([blob], "layer.png", { type: "image/png" }));
+  input.files = transfer.files;
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  return "ok";
+});
+await sleep(1900);
+
+const layerOnCanvas = await page.evaluate(() => {
+  const canvas = document.querySelector(".studio-workspace canvas");
+  if (!canvas) {
+    return false;
+  }
+  const ctx = canvas.getContext("2d");
+  const data = ctx.getImageData(
+    Math.round(canvas.width / 2) - 20,
+    Math.round(canvas.height / 2) - 20,
+    40,
+    40
+  ).data;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i] > 170 && data[i + 1] < 100 && data[i + 2] < 100) {
+      return true;
+    }
+  }
+  return false;
+});
+record("导出前图层已在画布上", layerOnCanvas && redCircle === "ok", "注入=" + redCircle);
+
+await clickByText("导出");
+await sleep(700);
+await clickByText("导出 PNG（当前页）");
+await sleep(3500);
+
+const exportStat = await page.evaluate(async () => {
+  const entry = (window.__exportAnchors || []).find((item) => item.href.indexOf("data:image/png") === 0);
+  if (!entry) {
+    return { ok: false, reason: "未捕获到 PNG 导出数据" };
+  }
+  const image = new Image();
+  const loaded = await new Promise((resolve) => {
+    image.onload = () => resolve(true);
+    image.onerror = () => resolve(false);
+    image.src = entry.href;
+  });
+  if (!loaded) {
+    return { ok: false, reason: "导出数据无法解码" };
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(image, 0, 0);
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  let red = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i] > 170 && data[i + 1] < 100 && data[i + 2] < 100) {
+      red += 1;
+    }
+  }
+  return {
+    ok: true,
+    width: canvas.width,
+    height: canvas.height,
+    ratio: red / (data.length / 4),
+    download: entry.download
+  };
+});
+
+record(
+  "图片层进入导出图",
+  Boolean(exportStat.ok) && exportStat.ratio > 0.005,
+  exportStat.ok
+    ? "导出 " + exportStat.width + "x" + exportStat.height + " 图层像素占比=" + (exportStat.ratio * 100).toFixed(2) + "% 文件名=" + exportStat.download
+    : String(exportStat.reason)
+);
+
 record("运行期无控制台错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 
 await browser.close();
