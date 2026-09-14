@@ -950,6 +950,29 @@ function PanelInspector({ panel }: { panel: Panel }) {
         />
         <NumberField label="BorderWidth" value={panel.borderWidth} min={0} onChange={patch("borderWidth") as (v: number) => void} />
         <NumberField label="Radius" value={panel.borderRadius} min={0} onChange={patch("borderRadius") as (v: number) => void} />
+        <div className="space-y-1.5">
+          <span className={labelClass}>角的处理</span>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              data-corner-mode="round"
+              className={getToggleButtonClass((panel.cornerMode ?? "round") === "round")}
+              onClick={() => patch("cornerMode")("round")}
+              title="圆角：四个角用圆弧过渡，半径取上面的 Radius"
+            >
+              圆角
+            </button>
+            <button
+              type="button"
+              data-corner-mode="chamfer"
+              className={getToggleButtonClass(panel.cornerMode === "chamfer")}
+              onClick={() => patch("cornerMode")("chamfer")}
+              title="倒角：用一条直线把角切掉，转折是直角切面。半径同样取上面的 Radius"
+            >
+              倒角
+            </button>
+          </div>
+        </div>
         <NumberField label="Gap" value={panel.gap} min={0} onChange={patch("gap") as (v: number) => void} />
 
         <div className="space-y-2">

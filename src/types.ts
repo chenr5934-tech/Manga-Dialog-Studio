@@ -54,7 +54,10 @@ export type Panel = {
   shapeKind?: PanelShapeKind;
   borderWidth: number;
   borderColor: string;
+  // 半径数值对圆角和倒角共用
   borderRadius: number;
+  // 角的处理方式：圆角（默认）或倒角（用直线把角切掉）
+  cornerMode?: "round" | "chamfer";
   gap: number;
   image?: PanelImage;
   parentId?: string;

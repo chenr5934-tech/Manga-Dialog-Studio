@@ -71,6 +71,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
   const [gridCols, setGridCols] = useState(2);
   const [splitRows, setSplitRows] = useState(2);
   const [splitCols, setSplitCols] = useState(1);
+  const [allCornerMode, setAllCornerMode] = useState<"round" | "chamfer">("round");
   const [allRounded, setAllRounded] = useState(false);
   const [allRadius, setAllRadius] = useState(0);
   const [allBorderWidth, setAllBorderWidth] = useState(4);
@@ -90,6 +91,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
     }
     setAllRounded(sample.borderRadius > 0);
     setAllRadius(sample.borderRadius);
+    setAllCornerMode(sample.cornerMode === "chamfer" ? "chamfer" : "round");
     setAllBorderWidth(sample.borderWidth);
   }, [activePage.panels]);
 
@@ -387,9 +389,34 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                 <p className={groupTitleClass}>批量样式</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="flex items-center gap-2 text-sm text-[var(--text-primary)]">
-                    <input type="checkbox" checked={allRounded} onChange={(event) => setAllRounded(event.target.checked)} />
-                    圆角
+                    <input
+                      type="checkbox"
+                      data-all-radius-toggle="1"
+                      checked={allRounded}
+                      onChange={(event) => setAllRounded(event.target.checked)}
+                    />
+                    切角
                   </label>
+                  <div className="flex overflow-hidden rounded-lg border border-[var(--line-soft)]">
+                    <button
+                      type="button"
+                      data-all-corner-mode="round"
+                      className={"studio-btn h-9 rounded-none border-0 px-3 text-xs" + (allCornerMode === "round" ? " studio-btn-primary" : "")}
+                      onClick={() => setAllCornerMode("round")}
+                      title="圆角：四个角用圆弧过渡"
+                    >
+                      圆角
+                    </button>
+                    <button
+                      type="button"
+                      data-all-corner-mode="chamfer"
+                      className={"studio-btn h-9 rounded-none border-0 px-3 text-xs" + (allCornerMode === "chamfer" ? " studio-btn-primary" : "")}
+                      onClick={() => setAllCornerMode("chamfer")}
+                      title="倒角：用一条直线把角切掉"
+                    >
+                      倒角
+                    </button>
+                  </div>
                   <input
                     className={`${inputClass} w-20 px-2`}
                     type="number"
@@ -411,6 +438,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                     onClick={() =>
                       setAllPanelsStyle({
                         borderRadius: allRounded ? allRadius : 0,
+                        cornerMode: allCornerMode,
                         borderWidth: allBorderWidth
                       })
                     }

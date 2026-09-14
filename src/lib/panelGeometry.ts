@@ -432,6 +432,64 @@ export function drawPolygonPath(
   context.lineTo(points[0].x, points[0].y);
 }
 
+
+// 倒角：把每个顶点用一条直线切掉。和圆角的区别是转折处是直角切面，不是圆弧。
+// 切点距离会被限制在相邻边长的一半以内，否则相邻两个倒角会互相吃掉。
+export function drawChamferedPolygonPath(
+  context: Pick<CanvasRenderingContext2D, "moveTo" | "lineTo">,
+  points: Point[],
+  size: number
+) {
+  if (points.length === 0) {
+    return;
+  }
+
+  if (points.length < 3 || size <= 0) {
+    drawPolygonPath(context, points);
+    return;
+  }
+
+  const cutPoints: Point[] = [];
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const prev = points[(index - 1 + points.length) % points.length];
+    const next = points[(index + 1) % points.length];
+
+    const toPrevX = prev.x - current.x;
+    const toPrevY = prev.y - current.y;
+    const toNextX = next.x - current.x;
+    const toNextY = next.y - current.y;
+    const prevLength = Math.hypot(toPrevX, toPrevY);
+    const nextLength = Math.hypot(toNextX, toNextY);
+
+    if (prevLength < 0.000001 || nextLength < 0.000001) {
+      cutPoints.push(current);
+      continue;
+    }
+
+    const distance = Math.min(size, prevLength / 2, nextLength / 2);
+    cutPoints.push({
+      x: current.x + (toPrevX / prevLength) * distance,
+      y: current.y + (toPrevY / prevLength) * distance
+    });
+    cutPoints.push({
+      x: current.x + (toNextX / nextLength) * distance,
+      y: current.y + (toNextY / nextLength) * distance
+    });
+  }
+
+  if (cutPoints.length < 3) {
+    drawPolygonPath(context, points);
+    return;
+  }
+
+  context.moveTo(cutPoints[0].x, cutPoints[0].y);
+  for (let index = 1; index < cutPoints.length; index += 1) {
+    context.lineTo(cutPoints[index].x, cutPoints[index].y);
+  }
+  context.lineTo(cutPoints[0].x, cutPoints[0].y);
+}
+
 export function drawRoundedPolygonPath(
   context: Pick<CanvasRenderingContext2D, "moveTo" | "lineTo" | "quadraticCurveTo">,
   points: Point[],

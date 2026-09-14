@@ -123,7 +123,11 @@ type EditorStore = {
   setProjectName: (name: string) => void;
   setCanvasPreset: (preset: CanvasPreset) => void;
   setCanvasSize: (width: number, height: number) => void;
-  setAllPanelsStyle: (style: { borderRadius?: number; borderWidth?: number }) => void;
+  setAllPanelsStyle: (style: {
+    borderRadius?: number;
+    cornerMode?: "round" | "chamfer";
+    borderWidth?: number;
+  }) => void;
 
   setActivePage: (id: string) => void;
   addPage: () => void;
@@ -1275,7 +1279,13 @@ function describePanelPatch(patch: Partial<Panel>): string {
     return "已调整分镜位置、尺寸或倾斜";
   }
 
-  if ("borderWidth" in patch || "borderRadius" in patch || "borderColor" in patch || "gap" in patch) {
+  if (
+    "borderWidth" in patch ||
+    "borderRadius" in patch ||
+    "cornerMode" in patch ||
+    "borderColor" in patch ||
+    "gap" in patch
+  ) {
     return "已修改分镜样式";
   }
 
@@ -1381,6 +1391,7 @@ function sanitizePanel(panel: Panel): Panel {
     shape: panel.shape,
     borderColor: panel.borderColor,
     borderRadius: Math.max(0, panel.borderRadius),
+    cornerMode: panel.cornerMode === "chamfer" ? "chamfer" : "round",
     borderWidth: Math.max(0, panel.borderWidth),
     gap: Math.max(0, panel.gap),
     image: sanitizePanelImage(panel.image),
@@ -2132,6 +2143,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           sanitizePanel({
             ...panel,
             borderRadius: style.borderRadius === undefined ? panel.borderRadius : style.borderRadius,
+            cornerMode: style.cornerMode === undefined ? panel.cornerMode : style.cornerMode,
             borderWidth: style.borderWidth === undefined ? panel.borderWidth : style.borderWidth
           })
         )

@@ -1,5 +1,10 @@
 import { CropConfig, Panel } from "../types";
-import { drawRoundedPolygonPath, getInsetPanelLocalPoints, getPolygonBounds } from "./panelGeometry";
+import {
+  drawChamferedPolygonPath,
+  drawRoundedPolygonPath,
+  getInsetPanelLocalPoints,
+  getPolygonBounds
+} from "./panelGeometry";
 
 export type PathDrawingContext = Pick<CanvasRenderingContext2D, "moveTo" | "lineTo" | "quadraticCurveTo">;
 
@@ -12,11 +17,21 @@ type CropRect = Pick<CropConfig, "x" | "y" | "width" | "height">;
 
 export function drawPanelPath(
   context: PathDrawingContext,
-  panel: Pick<Panel, "width" | "height" | "shape" | "borderRadius" | "points" | "shapeKind">,
+  panel: Pick<
+    Panel,
+    "width" | "height" | "shape" | "borderRadius" | "cornerMode" | "points" | "shapeKind"
+  >,
   inset = 0
 ) {
   const points = getInsetPanelLocalPoints(panel, inset);
-  drawRoundedPolygonPath(context, points, Math.max(0, panel.borderRadius - inset));
+  const size = Math.max(0, panel.borderRadius - inset);
+
+  if (panel.cornerMode === "chamfer") {
+    drawChamferedPolygonPath(context, points, size);
+    return;
+  }
+
+  drawRoundedPolygonPath(context, points, size);
 }
 
 export function getPanelImageLayout(panel: Panel, imageSize: ImageSize) {
