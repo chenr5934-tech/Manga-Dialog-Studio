@@ -153,19 +153,14 @@ await shot("v2-07-backdrop");
 // 6) 预设编辑器
 await clickByText("对话编辑");
 await sleep(400);
-await clickByText("新建预设");
-await sleep(800);
-const editorOpen = await page.evaluate(() => document.body.innerText.includes("编辑填字区域"));
-record("预设编辑器可打开", editorOpen);
-await shot("v2-08-preset-editor");
-
-// 7) 选空气泡后在预设编辑器里框选填字区域并保存为预设
-const canvasBox2 = await (await page.$(".studio-workspace > div")).boundingBox();
-await page.mouse.click(canvasBox2.x + canvasBox2.width * 0.5, canvasBox2.y + canvasBox2.height * 0.5);
-await sleep(500);
+// 「新建预设」入口已并入左侧的「导入自定义对话框」；这里验证更常用的路径：加气泡 → 编辑填字区
+await clickByText("+ 圆角气泡");
+await sleep(600);
 const editBtnOk = await clickByText("编辑填字区");
 await sleep(800);
 const stageOpen = await page.$("[data-preset-stage]");
+record("预设编辑器可打开", Boolean(stageOpen));
+await shot("v2-08-preset-editor");
 record("从选中气泡打开填字区编辑", editBtnOk && Boolean(stageOpen));
 await shot("v2-09-preset-editor-open");
 

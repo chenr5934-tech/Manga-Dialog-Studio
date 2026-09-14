@@ -1370,6 +1370,7 @@ function OverlayInspector({ overlay }: { overlay: OverlayImage }) {
 export default function InspectorPanel() {
   const activePage = useEditorStore((state) => getActivePage(state.project));
   const selection = useEditorStore((state) => state.selection);
+  const deleteSelection = useEditorStore((state) => state.deleteSelection);
 
   const selectedPanel =
     selection?.kind === "panel" ? activePage.panels.find((panel) => panel.id === selection.id) : undefined;
@@ -1396,6 +1397,22 @@ export default function InspectorPanel() {
       {selectedPanel && <PanelInspector panel={selectedPanel} />}
       {selectedBubble && <BubbleInspector bubble={selectedBubble} />}
       {selectedOverlay && <OverlayInspector overlay={selectedOverlay} />}
+
+      {selection ? (
+        <div className="mt-4 border-t border-[var(--line-soft)] pt-3">
+          <button
+            type="button"
+            data-delete-selection="1"
+            className={`${dangerButtonClass} w-full`}
+            onClick={() => deleteSelection()}
+          >
+            删除选中内容
+          </button>
+          <p className="mt-1.5 text-[11px] leading-4 text-[var(--text-secondary)]">
+            也可以直接按 Delete 或 Backspace 删除选中的分镜、气泡或图片层。
+          </p>
+        </div>
+      ) : null}
     </aside>
   );
 }

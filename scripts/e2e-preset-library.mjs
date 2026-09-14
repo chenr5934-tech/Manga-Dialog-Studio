@@ -202,8 +202,14 @@ await page.evaluate(() => {
   button?.click();
 });
 await sleep(600);
+// 「新建预设」已并入左侧「导入自定义对话框」；改走 加气泡 → 编辑填字区 这条常用路径
 await page.evaluate(() => {
-  const button = Array.from(document.querySelectorAll("button")).find((el) => el.innerText.trim() === "新建预设");
+  const button = Array.from(document.querySelectorAll("button")).find((el) => el.innerText.trim() === "+ 圆角气泡");
+  button?.click();
+});
+await sleep(700);
+await page.evaluate(() => {
+  const button = Array.from(document.querySelectorAll("button")).find((el) => el.innerText.trim() === "编辑填字区");
   button?.click();
 });
 await sleep(1000);

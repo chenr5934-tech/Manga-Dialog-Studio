@@ -7,21 +7,31 @@ const selectClass = "studio-select h-9 px-3 text-sm";
 const buttonClass = "studio-btn px-3 py-1.5 text-sm";
 const compactInputClass = "studio-input h-8 min-w-[180px] flex-1 px-3 text-sm font-semibold";
 const compactButtonClass = "studio-btn h-8 px-2.5 text-xs";
+const projectNameClass = "studio-input h-8 w-[190px] px-3 text-sm font-semibold";
 const primaryButtonClass = `${buttonClass} studio-btn-primary`;
-const dangerButtonClass = `${buttonClass} studio-btn-danger`;
+// 主操作按钮：比普通按钮更大更粗，让高频入口在第一眼里就跳出来
+const heroButtonClass = "studio-btn h-8 px-3.5 text-[13px] font-semibold";
+const heroPrimaryClass = `${heroButtonClass} studio-btn-primary`;
 const groupClass = "studio-subtle space-y-2 rounded-2xl p-3";
 const groupTitleClass = "text-[11px] uppercase tracking-[0.16em] text-[var(--text-secondary)]";
 
-type ToolCategory = "canvas" | "layout" | "style" | "text" | "export";
+type ToolCategory = "layout" | "style" | "export" | "project";
 
-const categories: ToolCategory[] = ["canvas", "layout", "style", "text", "export"];
+// 抽屉只放低频设置；导入图片 / 模板 / 导出 / Agent 这四件事直接摆在第一行
+const drawerCategories: ToolCategory[] = ["layout", "style", "project"];
+
+const categoryButtonLabel: Record<ToolCategory, string> = {
+  layout: "布局",
+  style: "批量样式",
+  export: "导出",
+  project: "更多"
+};
 
 const categoryTitleMap: Record<ToolCategory, string> = {
-  canvas: "画布设置",
-  layout: "分镜布局",
+  layout: "布局与画布",
   style: "批量样式",
-  text: "文字",
-  export: "导出"
+  export: "导出",
+  project: "项目文件"
 };
 
 type ToolbarProps = {
@@ -33,7 +43,6 @@ type ToolbarProps = {
 export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: ToolbarProps) {
   const project = useEditorStore((state) => state.project);
   const activePage = useEditorStore((state) => getActivePage(state.project));
-  const selection = useEditorStore((state) => state.selection);
   const manualPanelMode = useEditorStore((state) => state.manualPanelMode);
   const snapSizeTo16 = useEditorStore((state) => state.snapSizeTo16);
   const themeMode = useEditorStore((state) => state.themeMode);
@@ -60,7 +69,6 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
   const polygonTool = useEditorStore((state) => state.polygonTool);
   const togglePolygonTool = useEditorStore((state) => state.togglePolygonTool);
   const setBackdropColor = useEditorStore((state) => state.setBackdropColor);
-  const openPresetEditor = useEditorStore((state) => state.openPresetEditor);
   const openImportDialog = useEditorStore((state) => state.openImportDialog);
   const openTemplateLibrary = useEditorStore((state) => state.openTemplateLibrary);
   const sidePanel = useEditorStore((state) => state.sidePanel);
@@ -68,7 +76,6 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
   const saveProject = useEditorStore((state) => state.saveProject);
   const saveProjectAs = useEditorStore((state) => state.saveProjectAs);
   const loadProject = useEditorStore((state) => state.loadProject);
-  const deleteSelection = useEditorStore((state) => state.deleteSelection);
 
   const [canvasWidth, setCanvasWidth] = useState(activePage.canvas.width);
   const [canvasHeight, setCanvasHeight] = useState(activePage.canvas.height);
@@ -127,6 +134,14 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
       <div className="mb-2 flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--line-soft)] bg-[var(--panel-1)] px-2.5 py-2">
         <span className="studio-chip px-2.5 py-1 text-[11px] font-semibold tracking-[0.08em]">漫画对话工坊</span>
 
+        <input
+          className={projectNameClass}
+          value={project.name}
+          onChange={(event) => setProjectName(event.target.value)}
+          placeholder="项目名称"
+          title="项目名会影响导出文件名"
+        />
+
         <div className="flex overflow-hidden rounded-lg border border-[var(--line-soft)]">
           <button
             type="button"
@@ -148,131 +163,52 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
           </button>
         </div>
 
-        {storyboardMode === "storyboard" ? (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              className={`studio-btn h-7 px-2.5 text-xs ${manualPanelMode ? "studio-btn-primary" : ""}`}
-              onClick={() => toggleManualPanelMode()}
-              title="在画布上拖拽扣出矩形分镜"
-            >
-              矩形扣选
-            </button>
-            <button
-              type="button"
-              className={`studio-btn h-7 px-2.5 text-xs ${polygonTool ? "studio-btn-primary" : ""}`}
-              onClick={() => togglePolygonTool()}
-              title="单击加点，回到起点或按 Enter 闭合"
-            >
-              多边形扣选
-            </button>
-            <label className="studio-btn flex h-7 cursor-pointer items-center gap-1.5 px-2 text-xs">
-              <span>底图色</span>
-              <input
-                type="color"
-                className="h-4 w-6 cursor-pointer border-0 bg-transparent p-0"
-                value={activePage.backdropColor ?? "#f4f5f7"}
-                onChange={(event) => setBackdropColor(event.target.value)}
-                title="分镜模式的底图颜色"
-              />
-            </label>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button type="button" className="studio-btn h-7 px-2.5 text-xs" onClick={() => addBubble("rounded")}>
-              + 圆角气泡
-            </button>
-            <button type="button" className="studio-btn h-7 px-2.5 text-xs" onClick={() => addBubble("circle")}>
-              + 椭圆气泡
-            </button>
-            <button type="button" className="studio-btn h-7 px-2.5 text-xs" onClick={() => openPresetEditor()}>
-              新建预设
-            </button>
-          </div>
-        )}
+        <span className="mx-0.5 hidden h-5 w-px bg-[var(--line-soft)] sm:block" />
 
         <button
           type="button"
-          data-agent-toggle="1"
-          className={`studio-btn h-7 px-2.5 text-xs ${sidePanel === "agent" ? "studio-btn-primary" : ""}`}
-          onClick={() => setSidePanel(sidePanel === "agent" ? "inspector" : "agent")}
-          title="Agent 模式：用一句话描述想要的排版，自动生成分镜与气泡"
-        >
-          Agent 模式
-        </button>
-
-        <span className="ml-auto hidden text-[11px] text-[var(--text-secondary)] xl:block">
-          {storyboardMode === "storyboard"
-            ? "扣选区域后，在右侧属性面板为分镜导入图片"
-            : "把左侧预设拖到画布即可放置气泡"}
-        </span>
-      </div>
-
-      <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-0.5">
-        <input
-          className={compactInputClass}
-          value={project.name}
-          onChange={(event) => setProjectName(event.target.value)}
-          placeholder="项目名称"
-        />
-        <button className={compactButtonClass} disabled={historyPastCount === 0} onClick={() => undo()}>
-          撤销
-        </button>
-        <button className={compactButtonClass} disabled={historyFutureCount === 0} onClick={() => redo()}>
-          重做
-        </button>
-        <button
-          className={compactButtonClass}
-          disabled={busy.savingProject}
-          onClick={() => {
-            void saveProject();
-          }}
-        >
-          {busy.savingProject ? "保存中..." : "保存项目"}
-        </button>
-        <button
-          className={compactButtonClass}
-          disabled={busy.savingProject}
-          onClick={() => {
-            void saveProjectAs();
-          }}
-        >
-          {busy.savingProject ? "处理中..." : "另存为"}
-        </button>
-        <button
-          className={`${compactButtonClass} studio-btn-primary`}
+          data-hero-import="1"
+          className={heroPrimaryClass}
           onClick={() => openImportDialog()}
           title="按顺序多选导入漫画原稿图片，每张图片成为一个页面"
         >
           导入图片
         </button>
         <button
-          className={compactButtonClass}
+          type="button"
           data-open-template-library="1"
+          className={heroButtonClass}
           onClick={() => openTemplateLibrary()}
           title="整册版式模板：保存当前排版，或从模板新建后只替换画面"
         >
           模板
         </button>
         <button
-          className={compactButtonClass}
-          disabled={busy.loadingProject}
-          onClick={() => {
-            void loadProject();
-          }}
+          type="button"
+          data-hero-export="1"
+          className={`${heroButtonClass} ${activeCategory === "export" ? "studio-btn-primary" : ""}`}
+          onClick={() => toggleCategory("export")}
+          title="导出 PNG / PDF / 图片 ZIP"
         >
-          {busy.loadingProject ? "加载中..." : "加载项目"}
+          导出
         </button>
+        <button
+          type="button"
+          data-agent-toggle="1"
+          className={`${heroButtonClass} ${sidePanel === "agent" ? "studio-btn-primary" : ""}`}
+          onClick={() => setSidePanel(sidePanel === "agent" ? "inspector" : "agent")}
+          title="Agent 模式：用一句话描述想要的排版，自动生成分镜与气泡"
+        >
+          Agent 模式
+        </button>
+
         <div className="ml-auto flex items-center gap-1.5">
-          {categories.map((category) => (
-            <button
-              key={category}
-              className={`${compactButtonClass} ${activeCategory === category ? "studio-btn-primary" : ""}`}
-              onClick={() => toggleCategory(category)}
-            >
-              {categoryTitleMap[category]}
-            </button>
-          ))}
+          <button className={compactButtonClass} disabled={historyPastCount === 0} onClick={() => undo()}>
+            撤销
+          </button>
+          <button className={compactButtonClass} disabled={historyFutureCount === 0} onClick={() => redo()}>
+            重做
+          </button>
           <div className="studio-subtle flex h-8 items-center gap-2 rounded-full px-2">
             <span className={`text-[11px] ${themeMode === "light" ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>
               亮
@@ -295,6 +231,73 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
         </div>
       </div>
 
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="studio-subtle flex flex-wrap items-center gap-1.5 rounded-2xl px-2 py-1.5">
+          {storyboardMode === "storyboard" ? (
+            <>
+              <button
+                type="button"
+                className={`studio-btn h-7 px-2.5 text-xs ${manualPanelMode ? "studio-btn-primary" : ""}`}
+                onClick={() => toggleManualPanelMode()}
+                title="在画布上拖拽扣出矩形分镜"
+              >
+                矩形扣选
+              </button>
+              <button
+                type="button"
+                className={`studio-btn h-7 px-2.5 text-xs ${polygonTool ? "studio-btn-primary" : ""}`}
+                onClick={() => togglePolygonTool()}
+                title="单击加点，回到起点或按 Enter 闭合"
+              >
+                多边形扣选
+              </button>
+              <label className="studio-btn flex h-7 cursor-pointer items-center gap-1.5 px-2 text-xs">
+                <span>底图色</span>
+                <input
+                  type="color"
+                  className="h-4 w-6 cursor-pointer border-0 bg-transparent p-0"
+                  value={activePage.backdropColor ?? "#f4f5f7"}
+                  onChange={(event) => setBackdropColor(event.target.value)}
+                  title="分镜模式的底图颜色"
+                />
+              </label>
+            </>
+          ) : (
+            <button type="button" className="studio-btn h-7 px-2.5 text-xs" onClick={() => addBubble("rounded")}>
+              + 圆角气泡
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          {drawerCategories.map((category) => (
+            <button
+              key={category}
+              data-drawer={category}
+              className={`${compactButtonClass} ${activeCategory === category ? "studio-btn-primary" : ""}`}
+              onClick={() => toggleCategory(category)}
+              title={categoryTitleMap[category]}
+            >
+              {categoryButtonLabel[category]}
+            </button>
+          ))}
+        </div>
+
+        <div className="ml-auto flex items-center gap-1.5">
+          <button
+            className={`${compactButtonClass} studio-btn-primary`}
+            data-save-project="1"
+            disabled={busy.savingProject}
+            onClick={() => {
+              void saveProject();
+            }}
+            title="保存整册项目（含图片），首次会让你选择存放位置"
+          >
+            {busy.savingProject ? "保存中..." : "保存项目"}
+          </button>
+        </div>
+      </div>
+
       {activeCategory ? (
         <>
           <button
@@ -314,9 +317,11 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
               </button>
             </div>
 
-            {activeCategory === "canvas" ? (
+
+            {activeCategory === "layout" ? (
+              <>
               <section className={groupClass}>
-                <p className={groupTitleClass}>画布设置</p>
+                <p className={groupTitleClass}>画布</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <select
                     className={`${selectClass} min-w-[96px]`}
@@ -347,9 +352,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                   </form>
                 </div>
               </section>
-            ) : null}
 
-            {activeCategory === "layout" ? (
               <section className={groupClass}>
                 <p className={groupTitleClass}>分镜布局</p>
                 <div className="flex flex-wrap items-center gap-2">
@@ -436,12 +439,6 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <button
-                    className={`${buttonClass} ${manualPanelMode ? "border-cyan-300/70 bg-cyan-500/25" : ""}`}
-                    onClick={() => toggleManualPanelMode()}
-                  >
-                    手绘分镜
-                  </button>
-                  <button
                     className={`${buttonClass} ${snapSizeTo16 ? "border-emerald-300/70 bg-emerald-500/25" : ""}`}
                     onClick={() => toggleSnapSizeTo16()}
                   >
@@ -470,6 +467,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                   </button>
                 </div>
               </section>
+              </>
             ) : null}
 
             {activeCategory === "style" ? (
@@ -511,24 +509,6 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
               </section>
             ) : null}
 
-            {activeCategory === "text" ? (
-              <section className={groupClass}>
-                <p className={groupTitleClass}>文字</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button className={buttonClass} onClick={() => addBubble("rect")}>
-                    新增文字
-                  </button>
-                </div>
-                <p className="text-xs leading-5 text-[var(--text-secondary)]">
-                  默认创建矩形文字框；圆角、圆形、背景和排版方向都在右侧属性检查器里调整。
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button className={dangerButtonClass} disabled={!selection} onClick={() => deleteSelection()}>
-                    删除选中内容
-                  </button>
-                </div>
-              </section>
-            ) : null}
 
             {activeCategory === "export" ? (
               <section className={groupClass}>
@@ -567,6 +547,37 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                   </div>
                   <span>每页一张 PNG，按 001、002 序号命名，解压顺序即漫画顺序</span>
                 </div>
+              </section>
+            ) : null}
+
+            {activeCategory === "project" ? (
+              <section className={groupClass}>
+                <p className={groupTitleClass}>项目文件</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    className={buttonClass}
+                    data-save-as="1"
+                    disabled={busy.savingProject}
+                    onClick={() => {
+                      void saveProjectAs();
+                    }}
+                  >
+                    {busy.savingProject ? "处理中..." : "另存为"}
+                  </button>
+                  <button
+                    className={buttonClass}
+                    data-load-project="1"
+                    disabled={busy.loadingProject}
+                    onClick={() => {
+                      void loadProject();
+                    }}
+                  >
+                    {busy.loadingProject ? "加载中..." : "加载项目"}
+                  </button>
+                </div>
+                <p className="text-xs leading-5 text-[var(--text-secondary)]">
+                  另存为换个位置或名字保存整册；加载项目用于继续编辑已保存的 .openkoma.json 文件。
+                </p>
               </section>
             ) : null}
           </aside>

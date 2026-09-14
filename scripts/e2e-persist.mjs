@@ -124,6 +124,8 @@ await page.evaluate(() => {
   });
 });
 
+await clickByText("更多");
+await sleep(500);
 const clickOk = await clickByText("加载项目");
 await sleep(900);
 

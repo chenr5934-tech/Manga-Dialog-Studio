@@ -6,7 +6,10 @@ import { normalizePreset } from "../lib/presets";
 import { getActivePage, useEditorStore } from "../lib/store";
 
 const actionButtonClass =
-  "studio-btn h-7 flex-1 px-2 text-[11px] disabled:cursor-not-allowed disabled:opacity-40";
+  "studio-btn h-9 flex-1 px-3 text-xs disabled:cursor-not-allowed disabled:opacity-40";
+// 主入口比次级按钮更大更粗：导入自定义对话框是建立自己对话框库的最高频动作
+const primaryActionButtonClass =
+  "studio-btn studio-btn-primary h-9 flex-[1.35] px-3 text-xs font-semibold";
 
 function PresetThumb({ preset }: { preset: BubblePreset }) {
   if (preset.image) {
@@ -203,11 +206,12 @@ export default function BubblePresetPanel() {
       <div className="flex gap-1.5 border-b border-[var(--line-soft)] px-2.5 py-2">
         <button
           type="button"
-          className={actionButtonClass}
+          data-import-bubble-image="1"
+          className={primaryActionButtonClass}
           onClick={() => imageInputRef.current?.click()}
-          title="导入自定义对话框图片并框选填字区域"
+          title="导入自定义对话框图片，框选填字区域后存成预设，可反复套用"
         >
-          导入对话框图
+          导入自定义对话框
         </button>
         <button
           type="button"

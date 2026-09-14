@@ -126,7 +126,7 @@ const modalClosed = await page.evaluate(() => !document.querySelector('[data-bg-
 record("应用后窗口关闭", modalClosed);
 
 // ---------- 2) 图片层 ----------
-await clickByText("分镜布局");
+await clickByText("布局");
 await sleep(500);
 const overlayButton = await page.$("[data-add-overlay]");
 record("提供添加图片层入口", Boolean(overlayButton));
@@ -328,7 +328,7 @@ async function deleteSelection() {
 }
 
 // 椭圆分镜
-await clickByText("分镜布局");
+await clickByText("布局");
 await sleep(600);
 await page.evaluate(() => {
   window.__baseEllipse = window.__composite();
@@ -376,7 +376,7 @@ await page.evaluate(() => {
 
 // 「分镜布局」是开关，已展开时再点会收起；只在面板缺失时才去展开
 if (!(await page.$("[data-add-overlay]"))) {
-  await clickByText("分镜布局");
+  await clickByText("布局");
   await sleep(600);
 }
 const redCircle = await page.evaluate(async () => {
