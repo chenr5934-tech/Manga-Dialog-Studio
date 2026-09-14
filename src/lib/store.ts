@@ -39,6 +39,7 @@ import {
   Bubble,
   BubblePreset,
   BubbleType,
+  OverlayImage,
   CanvasPreset,
   CropConfig,
   PageImportItem,
@@ -128,6 +129,15 @@ type EditorStore = {
 
   selectPanel: (id: string) => void;
   selectBubble: (id: string) => void;
+  selectOverlay: (id: string) => void;
+
+  addOverlayImage: (input: {
+    image: string;
+    naturalWidth: number;
+    naturalHeight: number;
+  }) => void;
+  updateOverlay: (id: string, patch: Partial<OverlayImage>) => void;
+  deleteOverlay: (id: string) => void;
   clearSelection: () => void;
   deleteSelection: () => void;
 
@@ -1376,6 +1386,33 @@ function sanitizePanelPoints(points: Panel["points"]): Panel["points"] {
   return safe.length >= 3 ? safe : undefined;
 }
 
+// 叠加层只保留结构合法且图片可用的项
+function sanitizeOverlays(list: OverlayImage[] | undefined): OverlayImage[] | undefined {
+  if (!Array.isArray(list)) {
+    return undefined;
+  }
+
+  const safe = list
+    .filter((item) => item && typeof item.image === "string" && isLocalImageRef(item.image))
+    .map((item) => ({
+      id: item.id || uuidv4(),
+      x: Number.isFinite(item.x) ? item.x : 100,
+      y: Number.isFinite(item.y) ? item.y : 100,
+      width: Math.max(24, Number.isFinite(item.width) ? item.width : 400),
+      height: Math.max(24, Number.isFinite(item.height) ? item.height : 400),
+      rotation: normalizePanelRotation(item.rotation ?? 0),
+      opacity:
+        typeof item.opacity === "number" && Number.isFinite(item.opacity)
+          ? Math.min(1, Math.max(0, item.opacity))
+          : undefined,
+      image: item.image,
+      naturalWidth: Number.isFinite(item.naturalWidth) ? item.naturalWidth : undefined,
+      naturalHeight: Number.isFinite(item.naturalHeight) ? item.naturalHeight : undefined
+    }));
+
+  return safe.length > 0 ? safe : undefined;
+}
+
 function sanitizeBubble(bubble: Partial<Bubble> | undefined): Bubble {
   const safeType =
     bubble?.type === "rounded" || bubble?.type === "circle" || bubble?.type === "rect" || bubble?.type === "image"
@@ -1432,6 +1469,7 @@ function sanitizePage(page: Partial<ProjectPage> | undefined, index: number): Pr
     canvas: sanitizeCanvas(page?.canvas),
     panels: safePanels,
     bubbles: safeBubbles,
+    overlays: sanitizeOverlays(page?.overlays),
     backdropColor:
       typeof page?.backdropColor === "string" && page.backdropColor.trim()
         ? page.backdropColor.trim()
@@ -2425,6 +2463,119 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
+  selectOverlay: (id) => {
+    set({
+      selection: {
+        kind: "overlay",
+        id
+      }
+    });
+  },
+
+  addOverlayImage: ({ image, naturalWidth, naturalHeight }) => {
+    set((state) => {
+      const activePage = getActivePage(state.project);
+      const canvas = activePage.canvas;
+
+      // 默认按画布宽度四成摆放并保持原始比例，居中落位
+      const targetWidth = Math.max(80, canvas.width * 0.4);
+      const scale = targetWidth / Math.max(1, naturalWidth);
+      const width = Math.round(naturalWidth * scale);
+      const height = Math.round(naturalHeight * scale);
+
+      const overlay: OverlayImage = {
+        id: uuidv4(),
+        x: Math.round((canvas.width - width) / 2),
+        y: Math.round((canvas.height - height) / 2),
+        width,
+        height,
+        rotation: 0,
+        image,
+        naturalWidth,
+        naturalHeight
+      };
+
+      const historyState = withHistory(
+        state,
+        updateActivePage(state.project, (page) => ({
+          ...page,
+          overlays: [...(page.overlays ?? []), overlay]
+        })),
+        "已添加图片层"
+      );
+
+      if (!historyState) {
+        return state;
+      }
+
+      return {
+        ...historyState,
+        selection: { kind: "overlay", id: overlay.id }
+      };
+    });
+  },
+
+  updateOverlay: (id, patch) => {
+    set((state) => {
+      const activePage = getActivePage(state.project);
+      if (!(activePage.overlays ?? []).some((item) => item.id === id)) {
+        return state;
+      }
+
+      const historyState = withHistory(
+        state,
+        updateActivePage(state.project, (page) => ({
+          ...page,
+          overlays: (page.overlays ?? []).map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  ...patch,
+                  width: patch.width === undefined ? item.width : Math.max(24, patch.width),
+                  height: patch.height === undefined ? item.height : Math.max(24, patch.height),
+                  rotation:
+                    patch.rotation === undefined ? item.rotation : normalizePanelRotation(patch.rotation),
+                  opacity:
+                    patch.opacity === undefined
+                      ? item.opacity
+                      : Math.min(1, Math.max(0, patch.opacity))
+                }
+              : item
+          )
+        })),
+        "已调整图片层"
+      );
+
+      if (!historyState) {
+        return state;
+      }
+
+      return historyState;
+    });
+  },
+
+  deleteOverlay: (id) => {
+    set((state) => {
+      const historyState = withHistory(
+        state,
+        updateActivePage(state.project, (page) => ({
+          ...page,
+          overlays: (page.overlays ?? []).filter((item) => item.id !== id)
+        })),
+        "已删除图片层"
+      );
+
+      if (!historyState) {
+        return state;
+      }
+
+      return {
+        ...historyState,
+        selection: undefined
+      };
+    });
+  },
+
   clearSelection: () => {
     set({ selection: undefined });
   },
@@ -2455,6 +2606,30 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
         return {
           ...historyState,
+          selection: undefined
+        };
+      }
+
+      if (state.selection.kind === "overlay") {
+        const overlays = activePage.overlays ?? [];
+        if (!overlays.some((item) => item.id === state.selection?.id)) {
+          return {
+            selection: undefined
+          };
+        }
+
+        const overlayProject = updateActivePage(state.project, (page) => ({
+          ...page,
+          overlays: (page.overlays ?? []).filter((item) => item.id !== state.selection?.id)
+        }));
+
+        const overlayHistory = withHistory(state, overlayProject, "已删除图片层");
+        if (!overlayHistory) {
+          return state;
+        }
+
+        return {
+          ...overlayHistory,
           selection: undefined
         };
       }
@@ -2649,6 +2824,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           ...bubble,
           id: bubble.id
         }))
+        // 图片层属于素材，不入模板：空图片的图层无法通过校验，留着也没有意义
       })),
       activePageId: project.activePageId
     };

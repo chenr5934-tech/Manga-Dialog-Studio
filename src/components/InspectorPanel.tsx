@@ -1,7 +1,7 @@
 import { CSSProperties, ChangeEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { normalizeHexColor } from "../lib/colors";
-import { Bubble, BubbleDirection, BubbleType, CropConfig, Panel, PanelShape } from "../types";
+import { Bubble, BubbleDirection, BubbleType, CropConfig, OverlayImage, Panel, PanelShape } from "../types";
 import { shouldPreserveImageTransparency } from "../lib/imageFormat";
 import {
   getPanelImageClipBounds,
@@ -34,6 +34,7 @@ import {
 } from "../lib/project";
 import { getActivePage, useEditorStore } from "../lib/store";
 import { resolveBubbleOpacity } from "./BubbleVisual";
+import BackgroundRemoverModal from "./BackgroundRemoverModal";
 
 const containerClass =
   "studio-surface h-full overflow-auto p-4 text-[var(--text-primary)]";
@@ -862,6 +863,7 @@ function PanelInspector({ panel }: { panel: Panel }) {
   const uploadingPanelId = useEditorStore((state) => state.busy.uploadingPanelId);
 
   const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [bgRemoverOpen, setBgRemoverOpen] = useState(false);
   const localImageInputRef = useRef<HTMLInputElement | null>(null);
   const panelRotation = normalizePanelRotation(panel.rotation);
   const panelShape = normalizePanelShape(panel.shape, panel.width);
@@ -871,6 +873,7 @@ function PanelInspector({ panel }: { panel: Panel }) {
 
   useEffect(() => {
     setCropModalOpen(false);
+    setBgRemoverOpen(false);
   }, [panel.id]);
 
   const patch = (key: keyof Panel) => (value: string | number) => {
@@ -1051,6 +1054,18 @@ function PanelInspector({ panel }: { panel: Panel }) {
               打开手动裁剪
             </button>
           ) : null}
+
+          {panel.image?.original ? (
+            <button
+              className={buttonClass}
+              data-open-bg-remover="1"
+              disabled={isImageBusy}
+              onClick={() => setBgRemoverOpen(true)}
+              title="去掉图片里与背景色接近的像素，适合把白底素材抠成透明"
+            >
+              去除背景
+            </button>
+          ) : null}
         </div>
 
         {panel.image?.original ? (
@@ -1071,6 +1086,8 @@ function PanelInspector({ panel }: { panel: Panel }) {
       <CropEditor panel={panel} />
 
       <VisualCropModal panel={panel} open={cropModalOpen} onClose={() => setCropModalOpen(false)} />
+
+      <BackgroundRemoverModal panel={panel} open={bgRemoverOpen} onClose={() => setBgRemoverOpen(false)} />
     </div>
   );
 }
@@ -1269,6 +1286,87 @@ function BubbleInspector({ bubble }: { bubble: Bubble }) {
   );
 }
 
+// 图片层属性：位置、尺寸、旋转、不透明度
+function OverlayInspector({ overlay }: { overlay: OverlayImage }) {
+  const updateOverlay = useEditorStore((state) => state.updateOverlay);
+  const deleteOverlay = useEditorStore((state) => state.deleteOverlay);
+  const currentOpacity = typeof overlay.opacity === "number" ? overlay.opacity : 1;
+
+  return (
+    <div className="space-y-3">
+      <div className={sectionClass}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">图片层</h3>
+          <span className="studio-chip px-2.5 py-1 text-[11px]">Overlay</span>
+        </div>
+        <p className="text-xs leading-5 text-[var(--text-secondary)]">
+          这一层浮在分镜之上、气泡之下，用来做前景元素或贴图，让画面更有层次。可以直接在画布上拖动、缩放与旋转。
+        </p>
+      </div>
+
+      <div className={sectionClass}>
+        <NumberField label="X" value={overlay.x} onChange={(value) => updateOverlay(overlay.id, { x: value })} />
+        <NumberField label="Y" value={overlay.y} onChange={(value) => updateOverlay(overlay.id, { y: value })} />
+        <NumberField
+          label="宽度"
+          value={overlay.width}
+          min={24}
+          onChange={(value) => updateOverlay(overlay.id, { width: value })}
+        />
+        <NumberField
+          label="高度"
+          value={overlay.height}
+          min={24}
+          onChange={(value) => updateOverlay(overlay.id, { height: value })}
+        />
+        <NumberField
+          label="旋转"
+          value={overlay.rotation}
+          onChange={(value) => updateOverlay(overlay.id, { rotation: value })}
+        />
+      </div>
+
+      <div className={sectionClass}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">不透明度</h3>
+          <span className="studio-chip px-2.5 py-1 text-[11px]">{Math.round(currentOpacity * 100)}%</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          data-overlay-opacity="1"
+          value={Math.round(currentOpacity * 100)}
+          onChange={(event) => updateOverlay(overlay.id, { opacity: Number(event.target.value) / 100 })}
+          className="w-full accent-[var(--accent)]"
+        />
+        <div className="flex flex-wrap gap-2">
+          {[100, 80, 60, 40, 20].map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              className={getToggleButtonClass(Math.round(currentOpacity * 100) === preset)}
+              onClick={() => updateOverlay(overlay.id, { opacity: preset / 100 })}
+            >
+              {preset}%
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <button
+        type="button"
+        data-overlay-delete="1"
+        className="studio-btn studio-btn-danger h-8 w-full text-xs"
+        onClick={() => deleteOverlay(overlay.id)}
+      >
+        删除这一层
+      </button>
+    </div>
+  );
+}
+
 export default function InspectorPanel() {
   const activePage = useEditorStore((state) => getActivePage(state.project));
   const selection = useEditorStore((state) => state.selection);
@@ -1277,6 +1375,10 @@ export default function InspectorPanel() {
     selection?.kind === "panel" ? activePage.panels.find((panel) => panel.id === selection.id) : undefined;
   const selectedBubble =
     selection?.kind === "bubble" ? activePage.bubbles.find((bubble) => bubble.id === selection.id) : undefined;
+  const selectedOverlay =
+    selection?.kind === "overlay"
+      ? (activePage.overlays ?? []).find((overlay) => overlay.id === selection.id)
+      : undefined;
 
   return (
     <aside className={containerClass}>
@@ -1293,6 +1395,7 @@ export default function InspectorPanel() {
 
       {selectedPanel && <PanelInspector panel={selectedPanel} />}
       {selectedBubble && <BubbleInspector bubble={selectedBubble} />}
+      {selectedOverlay && <OverlayInspector overlay={selectedOverlay} />}
     </aside>
   );
 }

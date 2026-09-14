@@ -122,6 +122,20 @@ export type BubblePreset = {
   opacity?: number;
 };
 
+// 叠加图片层：浮在分镜之上、气泡之下，用来做前景元素增加层次
+export type OverlayImage = {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  opacity?: number;
+  image: string;
+  naturalWidth?: number;
+  naturalHeight?: number;
+};
+
 export type StoryboardMode = "storyboard" | "dialogue";
 
 // 批量导入漫画原稿时，一张图片对应一个页面
@@ -141,6 +155,8 @@ export type ProjectPage = {
   canvas: CanvasConfig;
   panels: Panel[];
   bubbles: Bubble[];
+  // 浮在分镜之上的图片层
+  overlays?: OverlayImage[];
   // 分镜模式底图颜色
   backdropColor?: string;
   // 页面底图（导入的漫画原稿），铺满整页画布
@@ -161,5 +177,9 @@ export type Selection =
     }
   | {
       kind: "bubble";
+      id: string;
+    }
+  | {
+      kind: "overlay";
       id: string;
     };

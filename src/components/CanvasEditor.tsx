@@ -2,7 +2,7 @@ import { Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, 
 import Konva from "konva";
 import { Circle, Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Shape, Stage, Text, Transformer } from "react-konva";
 import useImage from "use-image";
-import { Bubble, Panel, PanelPoint, ProjectPage } from "../types";
+import { Bubble, OverlayImage, Panel, PanelPoint, ProjectPage } from "../types";
 import { shouldPreserveImageTransparency } from "../lib/imageFormat";
 import {
   PANEL_EDGE_HANDLE_KEYS,
@@ -121,6 +121,26 @@ function PageBackgroundLayer({ page }: { page: ProjectPage }) {
       y={0}
       width={page.canvas.width}
       height={page.canvas.height}
+      listening={false}
+    />
+  );
+}
+
+// 叠加层：浮在分镜之上、气泡之下的独立图片，用来做前景元素
+function OverlayImageLayer({ overlay }: { overlay: OverlayImage }) {
+  const [image] = useImage(overlay.image, "anonymous");
+
+  if (!image) {
+    return null;
+  }
+
+  return (
+    <KonvaImage
+      image={image}
+      x={0}
+      y={0}
+      width={overlay.width}
+      height={overlay.height}
       listening={false}
     />
   );
@@ -506,6 +526,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
   const setActivePage = useEditorStore((state) => state.setActivePage);
   const selectPanel = useEditorStore((state) => state.selectPanel);
   const selectBubble = useEditorStore((state) => state.selectBubble);
+  const selectOverlay = useEditorStore((state) => state.selectOverlay);
+  const updateOverlay = useEditorStore((state) => state.updateOverlay);
   const clearSelection = useEditorStore((state) => state.clearSelection);
   const updatePanel = useEditorStore((state) => state.updatePanel);
   const updateBubble = useEditorStore((state) => state.updateBubble);
@@ -542,6 +564,10 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
 
     if (selection.kind === "panel") {
       return `panel-${selection.id}`;
+    }
+
+    if (selection.kind === "overlay") {
+      return `overlay-${selection.id}`;
     }
 
     return `bubble-${selection.id}`;
@@ -1285,6 +1311,69 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                 );
               })}
 
+              {(activePage.overlays ?? []).map((overlay) => {
+                const selected =
+                  !isExporting && selection?.kind === "overlay" && selection.id === overlay.id;
+
+                return (
+                  <Group
+                    key={overlay.id}
+                    id={`overlay-${overlay.id}`}
+                    name="overlay-node"
+                    x={overlay.x + overlay.width / 2}
+                    y={overlay.y + overlay.height / 2}
+                    width={overlay.width}
+                    height={overlay.height}
+                    offsetX={overlay.width / 2}
+                    offsetY={overlay.height / 2}
+                    rotation={overlay.rotation}
+                    opacity={overlay.opacity ?? 1}
+                    listening={!pickingMode}
+                    draggable={!pickingMode}
+                    onClick={(event) => {
+                      event.cancelBubble = true;
+                      selectOverlay(overlay.id);
+                    }}
+                    onTap={(event) => {
+                      event.cancelBubble = true;
+                      selectOverlay(overlay.id);
+                    }}
+                    onDragEnd={(event) => {
+                      updateOverlay(overlay.id, {
+                        x: event.target.x() - overlay.width / 2,
+                        y: event.target.y() - overlay.height / 2
+                      });
+                    }}
+                    onTransformEnd={(event) => {
+                      const node = event.target;
+                      const nextWidth = Math.max(24, node.width() * node.scaleX());
+                      const nextHeight = Math.max(24, node.height() * node.scaleY());
+                      node.scaleX(1);
+                      node.scaleY(1);
+                      updateOverlay(overlay.id, {
+                        x: node.x() - nextWidth / 2,
+                        y: node.y() - nextHeight / 2,
+                        width: nextWidth,
+                        height: nextHeight,
+                        rotation: normalizePanelRotation(node.rotation())
+                      });
+                    }}
+                  >
+                    <OverlayImageLayer overlay={overlay} />
+                    {selected ? (
+                      <Rect
+                        width={overlay.width}
+                        height={overlay.height}
+                        stroke="#2563eb"
+                        strokeWidth={2}
+                        dash={[8, 5]}
+                        listening={false}
+                      />
+                    ) : null}
+                  </Group>
+                );
+              })}
+
               {activePage.bubbles.map((bubble) => {
                 const selected = !isExporting && selection?.kind === "bubble" && selection.id === bubble.id;
                 return (
@@ -1408,7 +1497,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
               <Transformer
                 ref={transformerRef}
                 name="selection-transformer"
-                rotateEnabled={!isExporting && !pickingMode && selection?.kind === "panel"}
+                rotateEnabled={
+                  !isExporting && !pickingMode && (selection?.kind === "panel" || selection?.kind === "overlay")
+                }
                 resizeEnabled={!isExporting && !pickingMode && selection?.kind === "bubble"}
                 flipEnabled={false}
                 enabledAnchors={!isExporting && !pickingMode && selection?.kind === "bubble" ? BUBBLE_TRANSFORMER_ANCHORS : []}

@@ -1,5 +1,6 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { getActivePage, useEditorStore } from "../lib/store";
+import { loadImageElement, readImageFileAsDataUrl } from "../lib/dnd";
 
 const inputClass = "studio-input h-9 px-3 text-sm";
 const selectClass = "studio-select h-9 px-3 text-sm";
@@ -49,6 +50,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
   const splitGrid = useEditorStore((state) => state.splitGrid);
   const splitSelectedPanel = useEditorStore((state) => state.splitSelectedPanel);
   const addDefaultPanel = useEditorStore((state) => state.addDefaultPanel);
+  const addOverlayImage = useEditorStore((state) => state.addOverlayImage);
   const toggleManualPanelMode = useEditorStore((state) => state.toggleManualPanelMode);
   const toggleSnapSizeTo16 = useEditorStore((state) => state.toggleSnapSizeTo16);
   const setThemeMode = useEditorStore((state) => state.setThemeMode);
@@ -79,6 +81,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
   const [allBorderWidth, setAllBorderWidth] = useState(4);
   const [activeCategory, setActiveCategory] = useState<ToolCategory | null>(null);
   const [zipPixelRatio, setZipPixelRatio] = useState(2);
+  const overlayInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setCanvasWidth(activePage.canvas.width);
@@ -355,6 +358,14 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                   </button>
                   <button
                     className={primaryButtonClass}
+                    data-add-overlay="1"
+                    onClick={() => overlayInputRef.current?.click()}
+                    title="导入一张图片作为独立图层，浮在分镜上方做前景元素"
+                  >
+                    添加图片层
+                  </button>
+                  <button
+                    className={primaryButtonClass}
                     data-add-ellipse-panel="1"
                     onClick={() => {
                       const page = getActivePage(useEditorStore.getState().project);
@@ -371,7 +382,36 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                   >
                     椭圆分镜
                   </button>
-                  <span className="text-xs text-[var(--text-secondary)]">新建分镜默认为矩形，椭圆分镜用于圆形取景</span>
+                  <span className="text-xs text-[var(--text-secondary)]">
+                    新建分镜默认为矩形，椭圆分镜用于圆形取景，图片层浮在分镜之上
+                  </span>
+
+                  <input
+                    ref={overlayInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (!file) {
+                        return;
+                      }
+                      void (async () => {
+                        try {
+                          const dataUrl = await readImageFileAsDataUrl(file);
+                          const image = await loadImageElement(dataUrl);
+                          addOverlayImage({
+                            image: dataUrl,
+                            naturalWidth: image.naturalWidth || 1,
+                            naturalHeight: image.naturalHeight || 1
+                          });
+                        } catch {
+                          useEditorStore.getState().setNotice("图片层导入失败");
+                        }
+                      })();
+                    }}
+                  />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs text-[var(--text-secondary)]">网格切割</span>
