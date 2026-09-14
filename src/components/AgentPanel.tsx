@@ -5,6 +5,7 @@ import {
   applyAgentPlan,
   buildSystemPrompt,
   collectAgentContext,
+  compressReferenceImage,
   parseAgentPlan
 } from "../lib/agent";
 import { useEditorStore } from "../lib/store";
@@ -43,6 +44,7 @@ type Entry = {
   text: string;
   applied?: string[];
   actionErrors?: string[];
+  hasImage?: boolean;
 };
 
 const QUICK_TASKS = [
@@ -69,6 +71,35 @@ export default function AgentPanel() {
   const [instruction, setInstruction] = useState("");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [busy, setBusy] = useState(false);
+  const [reference, setReference] = useState<string | null>(null);
+  const [dropActive, setDropActive] = useState(false);
+
+  const acceptImage = useCallback(async (file: File | undefined) => {
+    if (!file || !file.type.startsWith("image/")) {
+      return;
+    }
+    try {
+      const compressed = await compressReferenceImage(file);
+      setReference(compressed);
+      setNotice("参考图已就绪，写一句要求再发送即可");
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : "参考图读取失败");
+    }
+  }, [setNotice]);
+
+  // 支持直接 Ctrl+V 粘贴截图
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const file = Array.from(event.clipboardData?.files ?? []).find((item) =>
+        item.type.startsWith("image/")
+      );
+      if (file) {
+        void acceptImage(file);
+      }
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [acceptImage]);
 
   const loadConfig = useCallback(async () => {
     try {
@@ -124,7 +155,12 @@ export default function AgentPanel() {
 
     setBusy(true);
     setInstruction("");
-    setEntries((current) => [...current, { id: uuidv4(), role: "user", text: trimmed }]);
+    const attachedImage = reference;
+    setReference(null);
+    setEntries((current) => [
+      ...current,
+      { id: uuidv4(), role: "user", text: trimmed, hasImage: Boolean(attachedImage) }
+    ]);
 
     try {
       const context = collectAgentContext();
@@ -144,7 +180,16 @@ export default function AgentPanel() {
           messages: [
             { role: "system", content: buildSystemPrompt(context) },
             ...recent,
-            { role: "user", content: trimmed }
+            {
+              role: "user",
+              // 带参考图时用多模态内容数组，视觉模型才能看到版面
+              content: attachedImage
+                ? [
+                    { type: "text", text: trimmed },
+                    { type: "image_url", image_url: { url: attachedImage } }
+                  ]
+                : trimmed
+            }
           ]
         })
       });
@@ -206,7 +251,28 @@ export default function AgentPanel() {
   };
 
   return (
-    <aside className="studio-surface flex h-full min-h-0 flex-col overflow-hidden">
+    <aside
+      data-agent-panel="1"
+      className={`studio-surface flex h-full min-h-0 flex-col overflow-hidden ${
+        dropActive ? "ring-2 ring-[var(--accent)]" : ""
+      }`}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes("Files")) {
+          return;
+        }
+        event.preventDefault();
+        setDropActive(true);
+      }}
+      onDragLeave={() => setDropActive(false)}
+      onDrop={(event) => {
+        if (!event.dataTransfer.types.includes("Files")) {
+          return;
+        }
+        event.preventDefault();
+        setDropActive(false);
+        void acceptImage(event.dataTransfer.files?.[0]);
+      }}
+    >
       <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-3 py-2.5">
         <div>
           <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">Agent</p>
@@ -404,7 +470,12 @@ export default function AgentPanel() {
                   : "border-[var(--line-soft)] bg-[var(--panel-1)]"
             }`}
           >
-            <p className="leading-5 text-[var(--text-primary)]">{entry.text}</p>
+            <p className="leading-5 text-[var(--text-primary)]">
+              {entry.hasImage ? (
+                <span className="mr-1 rounded bg-[var(--accent)] px-1 text-[10px] text-white">图</span>
+              ) : null}
+              {entry.text}
+            </p>
 
             {entry.applied && entry.applied.length > 0 ? (
               <ul className="mt-1 space-y-0.5">
@@ -429,12 +500,44 @@ export default function AgentPanel() {
         ))}
       </div>
 
+      {reference ? (
+        <div
+          data-agent-reference="1"
+          className="flex items-center gap-2 border-t border-[var(--line-soft)] bg-[var(--panel-1)] px-3 py-2"
+        >
+          <img
+            src={reference}
+            alt="参考图"
+            className="h-12 w-12 shrink-0 rounded border border-[var(--line-soft)] object-cover"
+          />
+          <span className="min-w-0 flex-1 text-[11px] leading-4 text-[var(--text-secondary)]">
+            参考图已就绪。写一句要求（例如「照着这张图复刻排版」）再发送，视觉模型会读出分镜结构。
+          </span>
+          <button
+            type="button"
+            data-agent-reference-clear="1"
+            className="studio-btn h-6 shrink-0 px-2 text-[10px]"
+            onClick={() => setReference(null)}
+          >
+            移除
+          </button>
+        </div>
+      ) : (
+        <p className="border-t border-[var(--line-soft)] px-3 py-1.5 text-[10px] text-[var(--text-secondary)]">
+          可以把参考漫画图拖到这里，或直接 Ctrl+V 粘贴截图
+        </p>
+      )}
+
       <div className="border-t border-[var(--line-soft)] px-3 py-2.5">
         <textarea
           className="studio-textarea w-full px-2 py-1.5 text-xs"
           rows={2}
           data-agent-input="1"
-          placeholder="例如：把这页切成一上二下三个分镜，底部加一个旁白框"
+          placeholder={
+            reference
+              ? "例如：照着这张图复刻排版"
+              : "例如：把这页切成一上二下三个分镜，底部加一个旁白框"
+          }
           value={instruction}
           onChange={(event) => setInstruction(event.target.value)}
           onKeyDown={(event) => {

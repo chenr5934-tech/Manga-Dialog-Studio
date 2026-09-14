@@ -28,6 +28,40 @@ export type AgentPlan = {
 
 export type AgentScope = { x: number; y: number; width: number; height: number };
 
+// 参考图统一压到长边 1280 以内再传，避免请求体和 token 失控。
+// 漫画是线稿，JPEG 0.85 足够让模型看清分镜结构。
+export async function compressReferenceImage(file: File, maxSide = 1280): Promise<string> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("图片读取失败"));
+    reader.readAsDataURL(file);
+  });
+
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const element = new Image();
+    element.onload = () => resolve(element);
+    element.onerror = () => reject(new Error("图片解码失败"));
+    element.src = dataUrl;
+  });
+
+  const longest = Math.max(image.naturalWidth, image.naturalHeight);
+  const scale = longest > maxSide ? maxSide / longest : 1;
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return dataUrl;
+  }
+
+  context.drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
+
 export type AgentContext = {
   canvasWidth: number;
   canvasHeight: number;
@@ -109,6 +143,13 @@ export function buildSystemPrompt(context: AgentContext): string {
     "4. 用户没有明确说颜色就不要改颜色。",
     "5. actions 数组可以为空，但必须存在。",
     "6. 只使用上面列出的操作类型，不要发明新类型。",
+    "",
+    "如果用户提供了一张参考漫画图并要求复刻排版：",
+    "1. 先看清整页被分成几行几列，是规则网格还是大小不一的格子。",
+    "2. 规则网格用 splitGrid 复刻；行列不等宽、或有格子跨行跨列的，改用多次 addPanel 逐个给出坐标。",
+    "3. 按参考图的长宽比设置画布尺寸，例如竖版条漫用 1200×2400 这样的比例。",
+    "4. 图中有对话框时，按其大致位置与尺寸加 addBubble，文字照抄；看不清就写占位文字。",
+    "5. 只复刻排版结构，不要试图还原画风、人物或网点细节。",
     "",
     "当前画布状态（仅供参考）：",
     "- 画布尺寸：" + context.canvasWidth + " x " + context.canvasHeight + " 像素",

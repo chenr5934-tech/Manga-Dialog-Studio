@@ -29,9 +29,16 @@ page.on("pageerror", (error) => errors.push(error.message));
 page.on("dialog", (dialog) => void dialog.accept());
 
 let mockContent = "";
+let lastUserMessage = null;
 await page.setRequestInterception(true);
 page.on("request", (request) => {
   if (request.url().includes("/api/agent/chat")) {
+    try {
+      const body = JSON.parse(request.postData() ?? "{}");
+      lastUserMessage = body.messages?.[body.messages.length - 1] ?? null;
+    } catch {
+      lastUserMessage = null;
+    }
     void request.respond({
       status: 200,
       contentType: "application/json",
@@ -86,8 +93,8 @@ const modelInfo = await page.evaluate(() => {
   };
 });
 record(
-  "模型可选最新型号且非旧默认",
-  modelInfo.options.includes("deepseek-v4-pro") && modelInfo.value === "deepseek-v4-pro",
+  "默认模型为 deepseek-flash 且候选可选",
+  modelInfo.options.includes("deepseek-flash") && modelInfo.value === "deepseek-flash",
   "当前=" + modelInfo.value + " 候选=" + modelInfo.options.join("/")
 );
 record("模型既可下拉也可手填", modelInfo.hasDatalist);
@@ -108,7 +115,7 @@ await sleep(1400);
 const savedForEffort = existsSync(CONFIG_PATH) ? JSON.parse(readFileSync(CONFIG_PATH, "utf8")) : null;
 record(
   "档位随配置落盘",
-  savedForEffort?.effort === "max" && savedForEffort?.model === "deepseek-v4-pro",
+  savedForEffort?.effort === "max" && savedForEffort?.model === "deepseek-flash",
   分档(savedForEffort)
 );
 function 分档(config) {
@@ -243,6 +250,74 @@ await page.click("[data-agent-scope-clear]");
 await sleep(600);
 const scopeCleared = await page.evaluate(() => !document.body.innerText.includes("作用范围："));
 record("可取消范围限制", scopeCleared);
+
+// ---------- 参考图与视觉复刻 ----------
+// 上一步已取消范围限制，这里直接继续
+const hasDropHint = await page.evaluate(() =>
+  document.body.innerText.includes("拖到这里") || document.body.innerText.includes("Ctrl+V")
+);
+record("面板提示可拖入参考图", hasDropHint);
+
+// 在页面里画一张两格的示意漫画，模拟拖入
+const dropped = await page.evaluate(async () => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 400;
+  canvas.height = 600;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, 400, 600);
+  ctx.strokeStyle = "#111111";
+  ctx.lineWidth = 10;
+  ctx.strokeRect(30, 30, 340, 250);
+  ctx.strokeRect(30, 310, 340, 250);
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  const file = new File([blob], "reference.png", { type: "image/png" });
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  const panel = document.querySelector("[data-agent-panel]");
+  if (!panel) {
+    return "面板未找到";
+  }
+  panel.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: transfer }));
+  return "ok";
+});
+void dropped;
+await sleep(1500);
+
+const referenceShown = await page.evaluate(() => Boolean(document.querySelector("[data-agent-reference]")));
+record("拖入图片后出现预览", referenceShown);
+await page.screenshot({ path: SHOT_DIR + "/agent-reference.png" });
+
+// 发送带图指令并检查多模态格式
+mockContent = JSON.stringify({
+  summary: "照参考图复刻为上下两格",
+  actions: [
+    { type: "setCanvasSize", width: 800, height: 1200 },
+    { type: "clearPanels" },
+    { type: "splitGrid", rows: 2, cols: 1 }
+  ]
+});
+const beforeVision = await readStats();
+await send("照着这张图复刻排版");
+const afterVision = await readStats();
+
+const contentIsMultimodal =
+  Array.isArray(lastUserMessage?.content) &&
+  lastUserMessage.content.some((part) => part?.type === "image_url" && String(part.image_url?.url).startsWith("data:image/"));
+record(
+  "带图请求使用多模态格式",
+  contentIsMultimodal,
+  Array.isArray(lastUserMessage?.content)
+    ? lastUserMessage.content.map((part) => part.type).join("+")
+    : typeof lastUserMessage?.content
+);
+record(
+  "按参考图复刻排版",
+  afterVision.panels === 2,
+  "分镜 " + beforeVision.panels + " → " + afterVision.panels
+);
+record("参考图在发送后清空", !(await page.evaluate(() => Boolean(document.querySelector("[data-agent-reference]")))));
 
 record("运行期无控制台错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 

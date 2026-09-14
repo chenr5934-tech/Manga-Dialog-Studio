@@ -33,8 +33,9 @@ const AGENT_PROVIDERS = {
   deepseek: {
     label: "DeepSeek",
     baseUrl: "https://api.deepseek.com",
-    models: ["deepseek-v4-pro", "deepseek-flash", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp"],
-    defaultModel: "deepseek-v4-pro",
+    // vision-exp 是实验版视觉模型，支持读图复刻排版；名称可能随官方调整
+    models: ["deepseek-v4-flash-vision-exp", "deepseek-flash", "deepseek-v4-pro", "deepseek-v4-flash"],
+    defaultModel: "deepseek-v4-flash-vision-exp",
     // 官方文档：reasoning_effort 取值 none / low / high / max
     effortParam: "reasoning_effort",
     effortMap: { off: "none", low: "low", high: "high", max: "max" }

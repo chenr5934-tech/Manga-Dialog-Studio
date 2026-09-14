@@ -72,6 +72,17 @@
 - 批量样式：圆角、边框粗细、页面底色
 - 页面：新增页、改画布尺寸
 
+**用参考图复刻排版**
+
+把别人的漫画页、或自己上一册的某一页**拖进 Agent 面板**（也可以直接 `Ctrl+V` 粘贴截图），再写一句「照着这张图复刻排版」，视觉模型会读出这张图的版面结构，自动在当前项目里还原成可编辑的分镜与气泡。
+
+- 规则网格会被识别成等分行列；大小不一的格子会逐个按坐标放置
+- 画面比例不同时，会按参考图的长宽比调整画布尺寸
+- 图里的对话框会按位置和大致文字内容一并加上
+- **只复刻排版结构**，不会去还原画风、人物或网点
+
+参考图会在发送前自动压到长边 1280 以内——漫画是线稿，这个尺寸足够模型看清分镜边界，又不至于让请求体和费用失控。
+
 **限定范围：只想改局部**
 
 点面板上的 **限定范围**，在画布上拖出一块区域（画布会画出橙色虚线框）。之后 Agent 只会在该区域内新增内容，**越界的操作会被直接跳过并在面板上标出**，不会悄悄塞到范围外。
@@ -82,7 +93,7 @@
 
 | 接口 | 可选模型 | 思考档位映射到 |
 | --- | --- | --- |
-| **DeepSeek**（默认） | deepseek-v4-pro、deepseek-flash、deepseek-v4-flash、deepseek-v4-flash-vision-exp | `reasoning_effort` |
+| **DeepSeek**（默认） | deepseek-v4-flash-vision-exp、deepseek-flash、deepseek-v4-pro、deepseek-v4-flash | `reasoning_effort` |
 | OpenAI | gpt-5、gpt-5-mini、gpt-4.1、gpt-4o、gpt-4o-mini | `reasoning_effort` |
 | Kimi (Moonshot) | kimi-k3、kimi-k2.6、kimi-k2.7-code | `reasoning_effort` |
 | 通义千问 | qwen-plus、qwen-flash、qwen-turbo、qwen3-235b-a22b | `enable_thinking` |
@@ -91,6 +102,8 @@
 | 自定义 | 手填 | `reasoning_effort` |
 
 **模型名是下拉框，也可以直接手填**——新模型发布后不用等更新，输入即可使用。各家模型迭代很快，列表只作参考。
+
+默认选的是 **deepseek-v4-flash-vision-exp**，因为它能读图，拖参考图复刻排版要靠它。名字里的 `exp` 表示是实验版，官方若调整命名，直接在下拉框里换或手填即可。
 
 **思考档位**
 
