@@ -24,7 +24,8 @@ const browser = await puppeteer.launch({
 
 // 先落两张真实图片文件：DataTransfer 的手工注入在跨 evaluate 时会被清空，
 // uploadFile 是 puppeteer 对 file input 的标准做法，稳定得多
-const assetDir = join(ROOT, "_shots");
+// 素材写到项目目录之外，避免污染版本库
+const assetDir = process.env.SHOT_DIR ?? "D:/dsh工作区/_shots";
 mkdirSync(assetDir, { recursive: true });
 const widePng = join(assetDir, "sticker-wide.png");
 const tallPng = join(assetDir, "sticker-tall.png");
