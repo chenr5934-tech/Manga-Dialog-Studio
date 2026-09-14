@@ -39,7 +39,7 @@ export const CANVAS_PRESETS: Record<CanvasPreset, { width: number; height: numbe
   }
 };
 
-export const DEFAULT_BACKDROP_COLOR = "#f4f5f7";
+export const DEFAULT_BACKDROP_COLOR = "#ffffff";
 
 // 预设实例化到画布时，气泡宽度占画布宽度的比例
 export const PRESET_CANVAS_WIDTH_RATIO = 0.34;
@@ -269,13 +269,10 @@ type CreatePageInput = {
 
 export function createProjectPage(input: CreatePageInput = {}): ProjectPage {
   const canvas = input.canvas ?? createCanvasFromPreset("A4");
+  // 页面默认是空的：画布底色铺满整页，分镜由用户扣选或导入原稿后自己加，
+  // 而不是一上来就压一个用不上的白色空框。需要时显式传 withDefaultPanel。
   const panels =
-    input.panels ??
-    (input.withDefaultPanel === false
-      ? []
-      : [
-          createDefaultPanelForCanvas(canvas)
-        ]);
+    input.panels ?? (input.withDefaultPanel ? [createDefaultPanelForCanvas(canvas)] : []);
 
   return {
     id: input.id ?? uuidv4(),

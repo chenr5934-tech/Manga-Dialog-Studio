@@ -63,6 +63,17 @@ await page.goto(APP_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
 await page.waitForSelector('[data-preset-id="builtin:speech-right"]', { timeout: 30000 });
 await sleep(600);
 
+// 新页面默认不含分镜（底层只有铺满的纯色底），需要时用「布局」抽屉里的「新建分镜」加一个
+async function addPanel() {
+  await clickByText("布局");
+  await sleep(500);
+  await clickByText("新建分镜");
+  await sleep(700);
+  await clickByText("关闭");
+  await sleep(400);
+}
+await addPanel();
+
 // ---------- 1) 裁剪框角手柄 ----------
 const canvasBox = await (await page.$(".studio-workspace > div")).boundingBox();
 await page.mouse.click(canvasBox.x + 120, canvasBox.y + 120);

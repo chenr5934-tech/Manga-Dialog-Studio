@@ -58,7 +58,31 @@ async function clickPresetCard(handle) {
 }
 
 await shot("v2-01-initial");
-record("应用加载完成", (await stats()).panels >= 1, JSON.stringify(await stats()));
+record("应用加载完成", (await stats()).panels === 0, JSON.stringify(await stats()));
+
+// 新页面默认不含分镜，底层是铺满编辑区的纯白底色
+const backdropSample = await page.evaluate(() => {
+  const canvas = document.querySelector(".studio-workspace canvas");
+  if (!canvas) {
+    return null;
+  }
+  const ctx = canvas.getContext("2d");
+  const corners = [
+    ctx.getImageData(3, 3, 1, 1).data,
+    ctx.getImageData(canvas.width - 4, 3, 1, 1).data,
+    ctx.getImageData(3, canvas.height - 4, 1, 1).data,
+    ctx.getImageData(canvas.width - 4, canvas.height - 4, 1, 1).data
+  ];
+  return {
+    corners: corners.map((pixel) => pixel[0] + "," + pixel[1] + "," + pixel[2]),
+    white: corners.every((pixel) => pixel[0] > 250 && pixel[1] > 250 && pixel[2] > 250)
+  };
+});
+record(
+  "底层默认白色且铺满编辑区（四角都无边框残留）",
+  Boolean(backdropSample) && backdropSample.white,
+  backdropSample ? backdropSample.corners.join(" | ") : "取不到画布"
+);
 
 // 1) 单击预设放置气泡
 const card = await page.$('[data-preset-id="builtin:speech-right"]');
@@ -130,7 +154,7 @@ await shot("v2-05-polygon-draft");
 await page.keyboard.press("Enter");
 await sleep(900);
 state = await stats();
-record("多边形扣选生成分镜", state.panels === 2, "分镜=" + state.panels);
+record("多边形扣选生成分镜", state.panels === 1, "分镜=" + state.panels);
 // 创建后处于自动选中态，可据此判断 points 是否完整保留
 const polygonPanelShown = await page.evaluate(() => document.body.innerText.includes("多边形分镜"));
 record("多边形分镜使用专属属性面板", polygonPanelShown);

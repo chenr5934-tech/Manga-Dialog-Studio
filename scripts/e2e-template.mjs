@@ -46,7 +46,18 @@ await page.goto(APP_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
 await page.waitForSelector('[data-preset-id="builtin:speech-right"]', { timeout: 30000 });
 await sleep(700);
 
-// 造点内容：一个气泡（默认项目已带 1 页 1 分镜）
+// 新页面默认不含分镜（底层只有铺满的纯色底），需要时用「布局」抽屉里的「新建分镜」加一个
+async function addPanel() {
+  await clickByText("布局");
+  await sleep(500);
+  await clickByText("新建分镜");
+  await sleep(700);
+  await clickByText("关闭");
+  await sleep(400);
+}
+await addPanel();
+
+// 造点内容：一个气泡加一个分镜，用来验证模板能保留版式结构
 const card = await page.$('[data-preset-id="builtin:speech-right"]');
 const box = await card.boundingBox();
 await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);

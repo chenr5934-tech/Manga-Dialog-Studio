@@ -41,6 +41,17 @@ await sleep(700);
 
 // ---------- 1) 去同色背景 ----------
 // 造一张纯白底 + 黑框的素材，注入到分镜的文件输入
+// 新页面默认不含分镜（底层只有铺满的纯色底），需要时用「布局」抽屉里的「新建分镜」加一个
+async function addPanel() {
+  await clickByText("布局");
+  await sleep(500);
+  await clickByText("新建分镜");
+  await sleep(700);
+  await clickByText("关闭");
+  await sleep(400);
+}
+await addPanel();
+
 await page.click(".studio-workspace > div");
 await sleep(400);
 await page.mouse.click(
