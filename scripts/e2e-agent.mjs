@@ -87,6 +87,24 @@ record("Agent 面板可打开", Boolean(panelText && panelText.includes("自动�
 await page.click("[data-agent-config-toggle]");
 await sleep(700);
 
+// 默认就该带着内置的排版提示词，用户不必自己去别处找
+const defaultPrompt = await page.evaluate(() => {
+  const area = document.querySelector("[data-agent-extra-prompt]");
+  if (!area) {
+    return null;
+  }
+  return {
+    length: area.value.length,
+    hasFormula: area.value.includes("2×2 四格"),
+    hasOps: area.value.includes("setPanelStyle")
+  };
+});
+record(
+  "自定义提示词默认就带着内置排版提示词",
+  Boolean(defaultPrompt) && defaultPrompt.length > 800 && defaultPrompt.hasFormula && defaultPrompt.hasOps,
+  defaultPrompt ? "长度=" + defaultPrompt.length : "没找到输入框"
+);
+
 const modelInfo = await page.evaluate(() => {
   const list = document.getElementById("agent-model-options");
   const input = document.querySelector("[data-agent-model]");
@@ -454,8 +472,39 @@ record(
   ""
 );
 
-await page.click("[data-agent-config-toggle]");
-await sleep(400);
+// 模型设置是开关，只在关着的时候才去点开
+if (!(await page.$("[data-agent-extra-prompt]"))) {
+  await page.click("[data-agent-config-toggle]");
+  await sleep(500);
+}
+
+// ---------- 改坏了能一键恢复 ----------
+
+// 改掉它，再点恢复默认
+await page.evaluate(() => {
+  const area = document.querySelector("[data-agent-extra-prompt]");
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
+  setter.call(area, "随便改一段");
+  area.dispatchEvent(new Event("input", { bubbles: true }));
+});
+await sleep(500);
+const afterEdit = await page.evaluate(() => document.querySelector("[data-agent-extra-prompt]").value.length);
+record("自定义提示词可以随意改", afterEdit < 100, "改后长度=" + afterEdit);
+
+const resetExists = await page.evaluate(() => Boolean(document.querySelector("[data-reset-prompt]")));
+record("提供恢复默认的入口", resetExists);
+
+await page.click("[data-reset-prompt]");
+await sleep(600);
+const restored = await page.evaluate(() => {
+  const area = document.querySelector("[data-agent-extra-prompt]");
+  return { length: area.value.length, hasFormula: area.value.includes("2×2 四格") };
+});
+record(
+  "一键恢复回内置提示词",
+  restored.length > 800 && restored.hasFormula,
+  "恢复后长度=" + restored.length
+);
 
 record("运行期无控制台错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 

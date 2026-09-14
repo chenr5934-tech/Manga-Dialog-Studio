@@ -9,6 +9,7 @@ import {
   parseAgentPlan
 } from "../lib/agent";
 import { AgentSkill, getAgentSkill, suggestSkillsFor } from "../lib/agentSkills";
+import { DEFAULT_AGENT_PROMPT } from "../lib/defaultPrompt";
 import { useEditorStore } from "../lib/store";
 
 type ProviderPreset = {
@@ -76,7 +77,8 @@ export default function AgentPanel() {
     model: "",
     apiKey: "",
     effort: "auto",
-    systemPromptExtra: ""
+    // 默认就带上内置排版提示词，用户想改直接改，改坏了一键恢复
+    systemPromptExtra: DEFAULT_AGENT_PROMPT
   });
   const [configOpen, setConfigOpen] = useState(false);
   const [instruction, setInstruction] = useState("");
@@ -123,7 +125,11 @@ export default function AgentPanel() {
         model: payload.model,
         apiKey: "",
         effort: payload.effort ?? "auto",
-        systemPromptExtra: payload.systemPromptExtra ?? ""
+        // 老配置里这个字段是空的，回落到内置默认，用户不必自己找提示词
+        systemPromptExtra:
+          typeof payload.systemPromptExtra === "string" && payload.systemPromptExtra.trim()
+            ? payload.systemPromptExtra
+            : DEFAULT_AGENT_PROMPT
       });
     } catch {
       setNotice("读取 Agent 配置失败");
@@ -440,9 +446,23 @@ export default function AgentPanel() {
             密钥只保存在本机 config/agent.json，由本地服务转发请求，浏览器不会拿到明文，也不会随项目一起提交。
           </p>
 
-          <label className="block space-y-1">
-            <span className={labelClass}>自定义提示词（可选）</span>
+          <div className="block space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className={labelClass}>自定义提示词（可选）</span>
+              <button
+                type="button"
+                data-reset-prompt="1"
+                className="studio-btn h-6 shrink-0 px-2 text-[10px]"
+                onClick={() =>
+                  setDraft((current) => ({ ...current, systemPromptExtra: DEFAULT_AGENT_PROMPT }))
+                }
+                title="把自定义提示词恢复成内置的漫画排版提示词"
+              >
+                恢复默认
+              </button>
+            </div>
             <textarea
+              aria-label="自定义提示词"
               className="studio-textarea w-full px-2 py-1.5 text-xs"
               rows={4}
               data-agent-extra-prompt="1"
@@ -455,7 +475,7 @@ export default function AgentPanel() {
             <span className="block text-[10px] leading-4 text-[var(--text-secondary)]">
               内置提示词负责让模型输出正确的操作格式，这段附加要求会加在它后面并优先遵循。
             </span>
-          </label>
+          </div>
 
           <button type="button" data-agent-save="1" className="studio-btn studio-btn-primary h-8 w-full text-xs" onClick={() => void saveConfig()}>
             保存设置
