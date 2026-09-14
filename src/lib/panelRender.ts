@@ -12,7 +12,7 @@ type CropRect = Pick<CropConfig, "x" | "y" | "width" | "height">;
 
 export function drawPanelPath(
   context: PathDrawingContext,
-  panel: Pick<Panel, "width" | "height" | "shape" | "borderRadius" | "points">,
+  panel: Pick<Panel, "width" | "height" | "shape" | "borderRadius" | "points" | "shapeKind">,
   inset = 0
 ) {
   const points = getInsetPanelLocalPoints(panel, inset);

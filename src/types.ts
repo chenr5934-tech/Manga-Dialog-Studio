@@ -37,6 +37,9 @@ export type PanelPoint = {
   y: number;
 };
 
+// 分镜轮廓类型：矩形（含斜切）、任意多边形、椭圆
+export type PanelShapeKind = "rect" | "polygon" | "ellipse";
+
 export type Panel = {
   id: string;
   x: number;
@@ -47,6 +50,8 @@ export type Panel = {
   shape: PanelShape;
   // 非空时按任意多边形渲染与裁剪，忽略 shape 四角模型
   points?: PanelPoint[];
+  // 缺省按 rect 处理，保持既有数据兼容
+  shapeKind?: PanelShapeKind;
   borderWidth: number;
   borderColor: string;
   borderRadius: number;

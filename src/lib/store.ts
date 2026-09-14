@@ -118,12 +118,13 @@ type EditorStore = {
   deletePage: (id: string) => void;
   movePage: (id: string, direction: "up" | "down") => void;
 
-  splitGrid: (rows: number, cols: number) => void;
+  splitGrid: (rows: number, cols: number, gap?: number) => void;
   clearPanels: () => void;
   clearBubbles: () => void;
   splitSelectedPanel: (rows: number, cols: number) => void;
   addDefaultPanel: () => void;
   createPanelFromRect: (x: number, y: number, width: number, height: number) => void;
+  createEllipsePanelFromRect: (x: number, y: number, width: number, height: number) => void;
 
   selectPanel: (id: string) => void;
   selectBubble: (id: string) => void;
@@ -1351,7 +1352,11 @@ function sanitizePanel(panel: Panel): Panel {
     gap: Math.max(0, panel.gap),
     image: sanitizePanelImage(panel.image),
     parentId: panel.parentId,
-    points: sanitizePanelPoints(panel.points)
+    points: sanitizePanelPoints(panel.points),
+    shapeKind:
+      panel.shapeKind === "ellipse" || panel.shapeKind === "polygon" || panel.shapeKind === "rect"
+        ? panel.shapeKind
+        : undefined
   });
 }
 
@@ -2210,15 +2215,24 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  splitGrid: (rows, cols) => {
+  splitGrid: (rows, cols, gap) => {
     const safeRows = Math.max(1, Math.floor(rows));
     const safeCols = Math.max(1, Math.floor(cols));
+    const safeGap =
+      typeof gap === "number" && Number.isFinite(gap) ? Math.max(0, Math.round(gap)) : undefined;
 
     set((state) => {
       const activePage = getActivePage(state.project);
       const nextProject = updateActivePage(state.project, (page) => ({
         ...page,
-        panels: splitGridPanels(activePage.canvas.width, activePage.canvas.height, safeRows, safeCols)
+        panels: splitGridPanels(
+          activePage.canvas.width,
+          activePage.canvas.height,
+          safeRows,
+          safeCols,
+          undefined,
+          safeGap
+        )
       }));
 
       const historyState = withHistory(state, nextProject, `已按 ${safeRows} x ${safeCols} 网格切割`);
@@ -2320,6 +2334,37 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           kind: "panel",
           id: panel.id
         }
+      };
+    });
+  },
+
+  createEllipsePanelFromRect: (x, y, width, height) => {
+    set((state) => {
+      const panel = createPanel({
+        x: Math.max(0, x),
+        y: Math.max(0, y),
+        width: Math.max(60, width),
+        height: Math.max(60, height),
+        shapeKind: "ellipse",
+        gap: 0
+      });
+
+      const historyState = withHistory(
+        state,
+        updateActivePage(state.project, (page) => ({
+          ...page,
+          panels: [...page.panels, panel]
+        })),
+        "已创建椭圆分镜"
+      );
+
+      if (!historyState) {
+        return state;
+      }
+
+      return {
+        ...historyState,
+        selection: { kind: "panel", id: panel.id }
       };
     });
   },

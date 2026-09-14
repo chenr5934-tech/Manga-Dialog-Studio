@@ -97,7 +97,9 @@ const DEFAULT_AGENT_CONFIG = {
   model: AGENT_PROVIDERS.deepseek.defaultModel,
   apiKey: "",
   temperature: 0.3,
-  effort: "auto"
+  effort: "auto",
+  // 用户在界面上写的附加指令，会追加到内置提示词之后
+  systemPromptExtra: ""
 };
 
 // 把统一的档位翻译成各家自己的参数；不支持的厂商直接不发该参数
@@ -352,6 +354,7 @@ async function handleAgentApi(request, response, pathname) {
       model: config.model,
       temperature: config.temperature,
       effort: config.effort,
+      systemPromptExtra: config.systemPromptExtra,
       hasApiKey: Boolean(config.apiKey),
       apiKeyHint: maskApiKey(config.apiKey),
       providers: Object.entries(AGENT_PROVIDERS).map(([id, preset]) => ({ id, ...preset }))
@@ -392,7 +395,11 @@ async function handleAgentApi(request, response, pathname) {
       model,
       apiKey,
       temperature: Number.isFinite(Number(payload?.temperature)) ? Number(payload.temperature) : current.temperature,
-      effort
+      effort,
+      systemPromptExtra:
+        typeof payload?.systemPromptExtra === "string"
+          ? payload.systemPromptExtra.slice(0, 8000)
+          : current.systemPromptExtra
     };
 
     try {
@@ -408,6 +415,7 @@ async function handleAgentApi(request, response, pathname) {
       baseUrl: next.baseUrl,
       model: next.model,
       effort: next.effort,
+      systemPromptExtra: next.systemPromptExtra,
       hasApiKey: Boolean(next.apiKey),
       apiKeyHint: maskApiKey(next.apiKey)
     });

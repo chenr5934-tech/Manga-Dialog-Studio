@@ -93,8 +93,9 @@ const modelInfo = await page.evaluate(() => {
   };
 });
 record(
-  "默认模型为 deepseek-flash 且候选可选",
-  modelInfo.options.includes("deepseek-flash") && modelInfo.value === "deepseek-flash",
+  "默认模型为视觉版且候选可选",
+  modelInfo.options.includes("deepseek-v4-flash-vision-exp") &&
+    modelInfo.value === "deepseek-v4-flash-vision-exp",
   "当前=" + modelInfo.value + " 候选=" + modelInfo.options.join("/")
 );
 record("模型既可下拉也可手填", modelInfo.hasDatalist);
@@ -115,7 +116,7 @@ await sleep(1400);
 const savedForEffort = existsSync(CONFIG_PATH) ? JSON.parse(readFileSync(CONFIG_PATH, "utf8")) : null;
 record(
   "档位随配置落盘",
-  savedForEffort?.effort === "max" && savedForEffort?.model === "deepseek-flash",
+  savedForEffort?.effort === "max" && savedForEffort?.model === "deepseek-v4-flash-vision-exp",
   分档(savedForEffort)
 );
 function 分档(config) {
@@ -318,6 +319,103 @@ record(
   "分镜 " + beforeVision.panels + " → " + afterVision.panels
 );
 record("参考图在发送后清空", !(await page.evaluate(() => Boolean(document.querySelector("[data-agent-reference]")))));
+
+// ---------- 椭圆分镜 / 留白 / 自定义提示词 ----------
+let lastSystemPrompt = null;
+page.on("request", (request) => {
+  if (request.url().includes("/api/agent/chat")) {
+    try {
+      const body = JSON.parse(request.postData() ?? "{}");
+      lastSystemPrompt = body.messages?.[0]?.content ?? null;
+    } catch {
+      lastSystemPrompt = null;
+    }
+  }
+});
+
+mockContent = JSON.stringify({
+  summary: "加一个圆形取景",
+  actions: [{ type: "addEllipsePanel", x: 300, y: 300, width: 900, height: 700 }]
+});
+const beforeEllipse = await readStats();
+await send("加一个圆形分镜");
+const afterEllipse = await readStats();
+record("Agent 可创建椭圆分镜", afterEllipse.panels === beforeEllipse.panels + 1, "分镜 " + beforeEllipse.panels + " → " + afterEllipse.panels);
+
+// 网格留白
+mockContent = JSON.stringify({
+  summary: "切成四格并留出间隙",
+  actions: [{ type: "splitGrid", rows: 2, cols: 2, gap: 60 }]
+});
+await send("切成四格，留白大一些");
+const gapLogged = await page.evaluate(() => document.body.innerText.includes("留白 60"));
+record("留白参数被执行", gapLogged);
+
+// 留白是否真的分开了格子：把底色压暗后采样，格子内应是白的、格间应是暗的
+mockContent = JSON.stringify({
+  summary: "压暗底色并切四格",
+  actions: [
+    { type: "setBackdropColor", color: "#101010" },
+    { type: "splitGrid", rows: 2, cols: 2, gap: 60 }
+  ]
+});
+await send("底色改暗，再切成四格留白 60");
+await sleep(800);
+
+const gapProbe = await page.evaluate(() => {
+  const canvas = document.querySelector(".studio-workspace canvas");
+  if (!canvas) return null;
+  const ctx = canvas.getContext("2d");
+  const brightness = (x, y) => {
+    const data = ctx.getImageData(Math.round(x), Math.round(y), 4, 4).data;
+    let sum = 0;
+    for (let i = 0; i < data.length; i += 4) sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+    return Number((sum / (data.length / 4)).toFixed(1));
+  };
+  // 画布中心是四格交汇处，应落在间隙上；左上格内部应是分镜的白色填充
+  return {
+    center: brightness(canvas.width / 2, canvas.height / 2),
+    insidePanel: brightness(canvas.width * 0.25, canvas.height * 0.25)
+  };
+});
+record(
+  "网格之间存在真实留白",
+  Boolean(gapProbe) && gapProbe.center < 120 && gapProbe.insidePanel > 180,
+  gapProbe ? "格间亮度=" + gapProbe.center + " 格内亮度=" + gapProbe.insidePanel : "取样失败"
+);
+
+// 自定义提示词注入
+await page.click("[data-agent-config-toggle]");
+await sleep(600);
+await page.evaluate(() => {
+  const input = document.querySelector("[data-agent-extra-prompt]");
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
+  setter.call(input, "分镜之间的留白统一按 80 处理，气泡文字一律留空。");
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+});
+await sleep(300);
+await page.click("[data-agent-save]");
+await sleep(1400);
+const savedExtra = existsSync(CONFIG_PATH) ? JSON.parse(readFileSync(CONFIG_PATH, "utf8")).systemPromptExtra : null;
+record("自定义提示词可保存", String(savedExtra ?? "").includes("留白统一按 80"), String(savedExtra).slice(0, 30));
+
+mockContent = JSON.stringify({ summary: "无操作", actions: [] });
+await send("随便试一下");
+record(
+  "自定义提示词随请求下发",
+  String(lastSystemPrompt ?? "").includes("留白统一按 80"),
+  lastSystemPrompt ? "系统提示词长度=" + lastSystemPrompt.length : "未捕获"
+);
+
+// 内置提示词应禁止照抄参考图文字
+record(
+  "内置提示词禁止照抄图中文字",
+  String(lastSystemPrompt ?? "").includes("不要照抄图里的文字"),
+  ""
+);
+
+await page.click("[data-agent-config-toggle]");
+await sleep(400);
 
 record("运行期无控制台错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 

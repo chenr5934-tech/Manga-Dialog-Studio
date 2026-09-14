@@ -33,6 +33,7 @@ type AgentConfig = {
   model: string;
   temperature: number;
   effort: string;
+  systemPromptExtra: string;
   hasApiKey: boolean;
   apiKeyHint: string;
   providers: ProviderPreset[];
@@ -66,7 +67,14 @@ export default function AgentPanel() {
   const setAgentScope = useEditorStore((state) => state.setAgentScope);
 
   const [config, setConfig] = useState<AgentConfig | null>(null);
-  const [draft, setDraft] = useState({ provider: "", baseUrl: "", model: "", apiKey: "", effort: "auto" });
+  const [draft, setDraft] = useState({
+    provider: "",
+    baseUrl: "",
+    model: "",
+    apiKey: "",
+    effort: "auto",
+    systemPromptExtra: ""
+  });
   const [configOpen, setConfigOpen] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -111,7 +119,8 @@ export default function AgentPanel() {
         baseUrl: payload.baseUrl,
         model: payload.model,
         apiKey: "",
-        effort: payload.effort ?? "auto"
+        effort: payload.effort ?? "auto",
+        systemPromptExtra: payload.systemPromptExtra ?? ""
       });
     } catch {
       setNotice("读取 Agent 配置失败");
@@ -178,7 +187,7 @@ export default function AgentPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: [
-            { role: "system", content: buildSystemPrompt(context) },
+            { role: "system", content: buildSystemPrompt(context, config?.systemPromptExtra) },
             ...recent,
             {
               role: "user",
@@ -404,6 +413,23 @@ export default function AgentPanel() {
           <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
             密钥只保存在本机 config/agent.json，由本地服务转发请求，浏览器不会拿到明文，也不会随项目一起提交。
           </p>
+
+          <label className="block space-y-1">
+            <span className={labelClass}>自定义提示词（可选）</span>
+            <textarea
+              className="studio-textarea w-full px-2 py-1.5 text-xs"
+              rows={4}
+              data-agent-extra-prompt="1"
+              placeholder={"追加在内置分镜提示词之后，用于微调风格或改做别的用途。\n例如：分镜之间留白再大一些；气泡文字统一用两个字占位。"}
+              value={draft.systemPromptExtra}
+              onChange={(event) =>
+                setDraft((current) => ({ ...current, systemPromptExtra: event.target.value }))
+              }
+            />
+            <span className="block text-[10px] leading-4 text-[var(--text-secondary)]">
+              内置提示词负责让模型输出正确的操作格式，这段附加要求会加在它后面并优先遵循。
+            </span>
+          </label>
 
           <button type="button" data-agent-save="1" className="studio-btn studio-btn-primary h-8 w-full text-xs" onClick={() => void saveConfig()}>
             保存设置

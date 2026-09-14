@@ -124,7 +124,30 @@ export function rotatePointAround(point: Point, center: Point, rotation?: number
   };
 }
 
-export function getPanelLocalPoints(panel: Pick<Panel, "width" | "height" | "shape" | "points">): Point[] {
+// 椭圆用点集近似，这样渲染、裁剪、命中都能沿用现有多边形链路
+export const ELLIPSE_POINT_COUNT = 48;
+
+export function createEllipseLocalPoints(width: number, height: number): Point[] {
+  const radiusX = width / 2;
+  const radiusY = height / 2;
+  const points: Point[] = [];
+  for (let index = 0; index < ELLIPSE_POINT_COUNT; index += 1) {
+    const angle = (index / ELLIPSE_POINT_COUNT) * Math.PI * 2 - Math.PI / 2;
+    points.push({
+      x: radiusX + Math.cos(angle) * radiusX,
+      y: radiusY + Math.sin(angle) * radiusY
+    });
+  }
+  return points;
+}
+
+export function getPanelLocalPoints(
+  panel: Pick<Panel, "width" | "height" | "shape" | "points" | "shapeKind">
+): Point[] {
+  if (panel.shapeKind === "ellipse") {
+    return createEllipseLocalPoints(panel.width, panel.height);
+  }
+
   // 多边形分镜直接按归一化顶点还原，其余下游（裁剪、内缩、包围盒）无需改动即可通用
   if (panel.points && panel.points.length >= 3) {
     return panel.points.map((point) => ({
@@ -338,7 +361,7 @@ export function updatePanelEdgeHandle(
 }
 
 export function getInsetPanelLocalPoints(
-  panel: Pick<Panel, "width" | "height" | "shape" | "points">,
+  panel: Pick<Panel, "width" | "height" | "shape" | "points" | "shapeKind">,
   inset = 0
 ): Point[] {
   const points = getPanelLocalPoints(panel);
@@ -348,7 +371,9 @@ export function getInsetPanelLocalPoints(
   return insetConvexPolygon(points, inset);
 }
 
-export function getPanelImageClipPoints(panel: Pick<Panel, "width" | "height" | "shape" | "points" | "gap">): Point[] {
+export function getPanelImageClipPoints(
+  panel: Pick<Panel, "width" | "height" | "shape" | "points" | "shapeKind" | "gap">
+): Point[] {
   return getInsetPanelLocalPoints(panel, panel.gap);
 }
 

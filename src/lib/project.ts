@@ -97,8 +97,29 @@ export function createPanel(input: Pick<Panel, "x" | "y" | "width" | "height"> &
     gap: input.gap ?? DEFAULT_PANEL_STYLE.gap,
     image: input.image,
     parentId: input.parentId,
-    points: input.points && input.points.length >= 3 ? input.points : undefined
+    points: input.points && input.points.length >= 3 ? input.points : undefined,
+    shapeKind: input.shapeKind
   };
+}
+
+// 椭圆分镜：按画布比例给一个居中的椭圆
+export function createEllipsePanel(
+  canvas: Pick<CanvasConfig, "width" | "height">,
+  input: Partial<Panel> = {}
+): Panel {
+  const width = Math.max(80, input.width ?? canvas.width * 0.5);
+  const height = Math.max(80, input.height ?? canvas.height * 0.3);
+  const x = input.x ?? (canvas.width - width) / 2;
+  const y = input.y ?? (canvas.height - height) / 2;
+
+  return createPanel({
+    ...input,
+    x,
+    y,
+    width,
+    height,
+    shapeKind: "ellipse"
+  });
 }
 
 export function createBubble(type: BubbleType = "rect", input: Partial<Bubble> = {}): Bubble {
@@ -282,15 +303,22 @@ export function splitGridPanels(
   canvasHeight: number,
   rows: number,
   cols: number,
-  margin = 32,
-  gap = 20
+  margin?: number,
+  gap?: number
 ): Panel[] {
   const safeRows = Math.max(1, rows);
   const safeCols = Math.max(1, cols);
-  const totalGapX = gap * (safeCols - 1);
-  const totalGapY = gap * (safeRows - 1);
-  const availableWidth = canvasWidth - margin * 2 - totalGapX;
-  const availableHeight = canvasHeight - margin * 2 - totalGapY;
+
+  // 留白按画布短边比例给：原先固定 20px 在 2480 宽的画布上几乎看不见，
+  // 切出来的格子会糊成一片
+  const shortSide = Math.max(1, Math.min(canvasWidth, canvasHeight));
+  const safeMargin = Math.max(0, Math.round(margin ?? shortSide * 0.022));
+  const safeGap = Math.max(0, Math.round(gap ?? shortSide * 0.02));
+
+  const totalGapX = safeGap * (safeCols - 1);
+  const totalGapY = safeGap * (safeRows - 1);
+  const availableWidth = canvasWidth - safeMargin * 2 - totalGapX;
+  const availableHeight = canvasHeight - safeMargin * 2 - totalGapY;
   const cellWidth = Math.max(36, Math.floor(availableWidth / safeCols));
   const cellHeight = Math.max(36, Math.floor(availableHeight / safeRows));
 
@@ -299,8 +327,8 @@ export function splitGridPanels(
     for (let c = 0; c < safeCols; c += 1) {
       output.push(
         createPanel({
-          x: margin + c * (cellWidth + gap),
-          y: margin + r * (cellHeight + gap),
+          x: safeMargin + c * (cellWidth + safeGap),
+          y: safeMargin + r * (cellHeight + safeGap),
           width: cellWidth,
           height: cellHeight,
           gap: 0

@@ -3,10 +3,11 @@ import { useEditorStore } from "./store";
 // Agent 能执行的操作。范围刻意收窄：只暴露可撤销、不破坏文件的操作。
 export type AgentAction =
   | { type: "setCanvasSize"; width: number; height: number }
-  | { type: "splitGrid"; rows: number; cols: number }
+  | { type: "splitGrid"; rows: number; cols: number; gap?: number }
   | { type: "clearPanels" }
   | { type: "clearBubbles" }
   | { type: "addPanel"; x: number; y: number; width: number; height: number }
+  | { type: "addEllipsePanel"; x?: number; y?: number; width?: number; height?: number }
   | { type: "addPolygonPanel"; points: { x: number; y: number }[] }
   | { type: "setBackdropColor"; color: string }
   | { type: "setPanelStyle"; borderRadius?: number; borderWidth?: number; borderColor?: string; gap?: number }
@@ -63,6 +64,8 @@ export async function compressReferenceImage(file: File, maxSide = 1280): Promis
 }
 
 export type AgentContext = {
+  // 用户在模型设置里写的附加要求，会注入到提示词末尾
+  systemPromptExtra?: string;
   canvasWidth: number;
   canvasHeight: number;
   pageCount: number;
@@ -116,42 +119,53 @@ export function collectAgentContext(): AgentContext {
   };
 }
 
-// 提示词是这套机制可靠性的关键：把可用操作、坐标约束、输出格式都写死
-export function buildSystemPrompt(context: AgentContext): string {
+export function buildSystemPrompt(context: AgentContext, customPrompt?: string): string {
+  const extra = String(customPrompt ?? "").trim();
   return [
     "你是漫画分镜排版助手，负责把用户的中文指令转换成一组可执行操作。",
     "",
     "只输出一个 JSON 对象，不要任何解释、不要 Markdown 代码围栏。格式：",
     '{"summary": "一句话说明你要做什么", "actions": [ {"type": "...", ...} ]}',
     "",
-    "可用操作：",
+    "【可用操作】",
     '- {"type":"setCanvasSize","width":数字,"height":数字}  设定当前页画布尺寸',
-    '- {"type":"splitGrid","rows":数字,"cols":数字}  把整页均分为若干分镜（会替换现有分镜）',
+    '- {"type":"splitGrid","rows":数字,"cols":数字,"gap":数字}  整页均分为网格（会替换现有分镜）；gap 是分镜之间的留白像素，务必给合适的值',
     '- {"type":"clearPanels"}  清空当前页所有分镜',
     '- {"type":"clearBubbles"}  清空当前页所有文字',
     '- {"type":"addPanel","x":数字,"y":数字,"width":数字,"height":数字}  指定位置加一个矩形分镜',
+    '- {"type":"addEllipsePanel","x":数字,"y":数字,"width":数字,"height":数字}  加一个椭圆分镜，用于圆形/椭圆形取景',
     '- {"type":"addPolygonPanel","points":[{"x":数字,"y":数字},...]}  加一个任意多边形分镜，至少 3 个顶点，按顺时针给出',
     '- {"type":"setPanelStyle","borderRadius":数字,"borderWidth":数字,"borderColor":"#RRGGBB","gap":数字}  批量设置所有分镜样式',
     '- {"type":"setBackdropColor","color":"#RRGGBB"}  设置页面底色',
-    '- {"type":"addBubble","x":数字,"y":数字,"width":数字,"height":数字,"text":"文字","presetName":"预设名"}  加一个气泡，x/y 是气泡中心点；presetName 可省略',
+    '- {"type":"addBubble","x":数字,"y":数字,"width":数字,"height":数字,"text":"文字","presetName":"预设名"}  加一个气泡，x/y 是气泡中心点',
     '- {"type":"addPage"}  在末尾新增一页',
     "",
-    "约束：",
-    "1. 坐标必须落在画布范围内，x/y 为左上角，除非该操作特别说明为中心点。",
-    "2. 一页内分镜数量通常不超过 9 个，气泡不超过 12 个。",
-    "3. splitGrid 会覆盖当前页已有的分镜，若用户想追加请用 addPanel。",
-    "4. 用户没有明确说颜色就不要改颜色。",
-    "5. actions 数组可以为空，但必须存在。",
+    "【硬性约束】",
+    "1. 坐标是画布像素，原点在左上角；除注明外 x/y 指左上角。",
+    "2. 所有内容必须落在画布范围内。",
+    "3. 一页分镜通常不超过 9 个，气泡不超过 12 个。",
+    "4. splitGrid 会替换已有分镜；要保留现有分镜再追加，请用 addPanel。",
+    "5. 用户没有明确要求就不要改颜色。",
     "6. 只使用上面列出的操作类型，不要发明新类型。",
+    "7. actions 数组可以为空，但必须存在。",
     "",
-    "如果用户提供了一张参考漫画图并要求复刻排版：",
-    "1. 先看清整页被分成几行几列，是规则网格还是大小不一的格子。",
-    "2. 规则网格用 splitGrid 复刻；行列不等宽、或有格子跨行跨列的，改用多次 addPanel 逐个给出坐标。",
+    "【留白：很重要】",
+    "分镜之间必须留出明显间隙，绝不能切得严丝合缝——贴在一起的分镜连边框都分不清。",
+    "用 splitGrid 的 gap 指定，参考值为画布短边的 2% 左右：",
+    "例如 2480 宽的页面用 gap 50 上下，小的格子漫画可以用 30～40，最多不要超过 120。",
+    "用 addPanel 逐个摆放时，相邻分镜之间同样要手动留出这个间隙。",
+    "",
+    "【复刻参考图的规矩：很重要】",
+    "当用户给了一张参考漫画图并要求复刻排版时：",
+    "1. 先判断版面结构：分成几行几列、格子是否等大、有没有跨行跨列的大格、有没有斜切或圆形格子。",
+    "2. 规则网格用 splitGrid；大小不一的用多次 addPanel 逐个给出坐标；圆形格子用 addEllipsePanel。",
     "3. 按参考图的长宽比设置画布尺寸，例如竖版条漫用 1200×2400 这样的比例。",
-    "4. 图中有对话框时，按其大致位置与尺寸加 addBubble，文字照抄；看不清就写占位文字。",
-    "5. 只复刻排版结构，不要试图还原画风、人物或网点细节。",
+    "4. 相邻分镜之间要留出间隙，参考图里本来就有间隙，不要把它抹平。",
+    "5. 参考图里的对话框可以按位置和尺寸加上，但【绝对不要照抄图里的文字】——",
+    "   text 一律留空写 \"\"，用户要的是能反复套用的版式，文字由他自己填。",
+    "6. 只复刻版面结构，不要去还原画风、人物、网点、手写字或对白内容。",
     "",
-    "当前画布状态（仅供参考）：",
+    "【当前画布】",
     "- 画布尺寸：" + context.canvasWidth + " x " + context.canvasHeight + " 像素",
     "- 当前是第 " + (context.activePageIndex + 1) + " 页，共 " + context.pageCount + " 页",
     "- 当前页已有分镜 " + context.panelCount + " 个、气泡 " + context.bubbleCount + " 个",
@@ -174,6 +188,9 @@ export function buildSystemPrompt(context: AgentContext): string {
             " 之间",
           "- 不要把任何分镜或气泡放在范围之外"
         ].join("\n")
+      : "",
+    extra
+      ? ["", "【用户附加要求】", "在不违反上面输出格式的前提下优先遵循：", extra].join("\n")
       : ""
   ]
     .filter(Boolean)
@@ -252,8 +269,32 @@ export function applyAgentPlan(plan: AgentPlan): ApplyResult {
         case "splitGrid": {
           const rows = Math.min(9, Math.max(1, Math.round(safeNumber(action.rows, 2))));
           const cols = Math.min(9, Math.max(1, Math.round(safeNumber(action.cols, 2))));
-          store.splitGrid(rows, cols);
-          applied.push(`切分为 ${rows} 行 × ${cols} 列`);
+          const rawGap = Number(action.gap);
+          const gap = Number.isFinite(rawGap) ? Math.min(240, Math.max(0, Math.round(rawGap))) : undefined;
+          store.splitGrid(rows, cols, gap);
+          applied.push(
+            `切分为 ${rows} 行 × ${cols} 列` + (gap === undefined ? "" : `（留白 ${gap}）`)
+          );
+          break;
+        }
+
+        case "addEllipsePanel": {
+          const page = useEditorStore.getState();
+          const project = page.project;
+          const activePage = project.pages.find((entry) => entry.id === project.activePageId);
+          const canvas = activePage?.canvas ?? { width: 2480, height: 3508 };
+          const width = Math.max(60, safeNumber(action.width, canvas.width * 0.45));
+          const height = Math.max(60, safeNumber(action.height, canvas.height * 0.28));
+          const x = safeNumber(action.x, (canvas.width - width) / 2);
+          const y = safeNumber(action.y, (canvas.height - height) / 2);
+
+          if (scope && !centerWithinScope(scope, x, y, width, height)) {
+            errors.push("椭圆分镜超出限定范围，已跳过");
+            break;
+          }
+
+          page.createEllipsePanelFromRect(x, y, width, height);
+          applied.push("新增椭圆分镜");
           break;
         }
 

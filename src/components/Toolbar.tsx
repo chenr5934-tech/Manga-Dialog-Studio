@@ -353,7 +353,25 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                   <button className={primaryButtonClass} onClick={() => addDefaultPanel()}>
                     新建分镜
                   </button>
-                  <span className="text-xs text-[var(--text-secondary)]">创建一个与初始默认分镜相同大小的分镜</span>
+                  <button
+                    className={primaryButtonClass}
+                    data-add-ellipse-panel="1"
+                    onClick={() => {
+                      const page = getActivePage(useEditorStore.getState().project);
+                      const width = page.canvas.width * 0.45;
+                      const height = page.canvas.height * 0.28;
+                      useEditorStore.getState().createEllipsePanelFromRect(
+                        (page.canvas.width - width) / 2,
+                        (page.canvas.height - height) / 2,
+                        width,
+                        height
+                      );
+                    }}
+                    title="创建一个椭圆（圆形）分镜，用于圆形取景"
+                  >
+                    椭圆分镜
+                  </button>
+                  <span className="text-xs text-[var(--text-secondary)]">新建分镜默认为矩形，椭圆分镜用于圆形取景</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs text-[var(--text-secondary)]">网格切割</span>
