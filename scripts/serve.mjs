@@ -24,6 +24,69 @@ const LIBRARIES = {
   templates: join(PROJECT_ROOT, "templates")
 };
 
+const AGENT_CONFIG_DIR = join(PROJECT_ROOT, "config");
+const AGENT_CONFIG_PATH = join(AGENT_CONFIG_DIR, "agent.json");
+
+// 以下端点均已实测可达（无 key 时返回 401 而非 404）
+const AGENT_PROVIDERS = {
+  deepseek: { label: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-chat" },
+  openai: { label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
+  moonshot: { label: "Kimi (Moonshot)", baseUrl: "https://api.moonshot.cn/v1", model: "moonshot-v1-8k" },
+  dashscope: {
+    label: "通义千问",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    model: "qwen-plus"
+  },
+  zhipu: { label: "智谱 GLM", baseUrl: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash" },
+  ollama: { label: "本地 Ollama", baseUrl: "http://127.0.0.1:11434/v1", model: "qwen2.5" },
+  custom: { label: "自定义（OpenAI 兼容）", baseUrl: "", model: "" }
+};
+
+const DEFAULT_AGENT_CONFIG = {
+  provider: "deepseek",
+  baseUrl: AGENT_PROVIDERS.deepseek.baseUrl,
+  model: AGENT_PROVIDERS.deepseek.model,
+  apiKey: "",
+  temperature: 0.3
+};
+
+function readAgentConfig() {
+  try {
+    const parsed = JSON.parse(readFileSync(AGENT_CONFIG_PATH, "utf8"));
+    return {
+      ...DEFAULT_AGENT_CONFIG,
+      ...parsed,
+      temperature: Number.isFinite(Number(parsed?.temperature)) ? Number(parsed.temperature) : 0.3
+    };
+  } catch {
+    return { ...DEFAULT_AGENT_CONFIG };
+  }
+}
+
+function writeAgentConfig(next) {
+  if (!existsSync(AGENT_CONFIG_DIR)) {
+    mkdirSync(AGENT_CONFIG_DIR, { recursive: true });
+  }
+  writeFileSync(AGENT_CONFIG_PATH, JSON.stringify(next, null, 2), "utf8");
+}
+
+// 只回传密钥是否已配置与末位提示，避免明文到处出现
+function maskApiKey(key) {
+  const raw = String(key ?? "");
+  if (!raw) {
+    return "";
+  }
+  return raw.length <= 6 ? "****" : "****" + raw.slice(-4);
+}
+
+function joinApiUrl(baseUrl, path) {
+  const base = String(baseUrl ?? "").trim().replace(/\/+$/, "");
+  if (!base) {
+    return "";
+  }
+  return base + path;
+}
+
 function ensureLibraryDir(dir) {
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
@@ -206,6 +269,160 @@ function createLibraryHandler(kind) {
 const handlePresetApi = createLibraryHandler("presets");
 const handleTemplateApi = createLibraryHandler("templates");
 
+// Agent 模式：配置读写 + 对话转发。
+// 密钥只在本地服务里使用，浏览器始终拿不到明文。
+async function handleAgentApi(request, response, pathname) {
+  if (!pathname.startsWith("/api/agent")) {
+    return false;
+  }
+
+  if (pathname === "/api/agent/config" && request.method === "GET") {
+    const config = readAgentConfig();
+    sendJson(response, 200, {
+      provider: config.provider,
+      baseUrl: config.baseUrl,
+      model: config.model,
+      temperature: config.temperature,
+      hasApiKey: Boolean(config.apiKey),
+      apiKeyHint: maskApiKey(config.apiKey),
+      providers: Object.entries(AGENT_PROVIDERS).map(([id, preset]) => ({ id, ...preset }))
+    });
+    return true;
+  }
+
+  if (pathname === "/api/agent/config" && request.method === "POST") {
+    let payload;
+    try {
+      payload = JSON.parse(await readRequestBody(request));
+    } catch {
+      sendJson(response, 400, { error: "请求内容无法解析" });
+      return true;
+    }
+
+    const current = readAgentConfig();
+    const providerId = AGENT_PROVIDERS[payload?.provider] ? payload.provider : current.provider;
+    const preset = AGENT_PROVIDERS[providerId];
+    const baseUrl = String(payload?.baseUrl ?? "").trim() || preset.baseUrl || current.baseUrl;
+    const model = String(payload?.model ?? "").trim() || preset.model || current.model;
+
+    // 传了空字符串表示沿用已保存的密钥，避免前端回写打码值
+    const apiKey =
+      typeof payload?.apiKey === "string" && payload.apiKey.trim() && !payload.apiKey.includes("****")
+        ? payload.apiKey.trim()
+        : current.apiKey;
+
+    const next = {
+      provider: providerId,
+      baseUrl,
+      model,
+      apiKey,
+      temperature: Number.isFinite(Number(payload?.temperature)) ? Number(payload.temperature) : current.temperature
+    };
+
+    try {
+      writeAgentConfig(next);
+    } catch (error) {
+      sendJson(response, 500, { error: error instanceof Error ? error.message : "配置写入失败" });
+      return true;
+    }
+
+    sendJson(response, 200, {
+      ok: true,
+      provider: next.provider,
+      baseUrl: next.baseUrl,
+      model: next.model,
+      hasApiKey: Boolean(next.apiKey),
+      apiKeyHint: maskApiKey(next.apiKey)
+    });
+    return true;
+  }
+
+  if (pathname === "/api/agent/chat" && request.method === "POST") {
+    const config = readAgentConfig();
+    if (!config.apiKey && config.provider !== "ollama") {
+      sendJson(response, 400, { error: "还没有配置 API Key，请先在 Agent 面板里填写并保存" });
+      return true;
+    }
+    if (!config.baseUrl) {
+      sendJson(response, 400, { error: "还没有配置接口地址" });
+      return true;
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(await readRequestBody(request));
+    } catch {
+      sendJson(response, 400, { error: "请求内容无法解析" });
+      return true;
+    }
+
+    const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+    if (messages.length === 0) {
+      sendJson(response, 400, { error: "没有可发送的消息" });
+      return true;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 120000);
+
+    try {
+      const upstream = await fetch(joinApiUrl(config.baseUrl, "/chat/completions"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + config.apiKey
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages,
+          temperature: config.temperature,
+          stream: false
+        }),
+        signal: controller.signal
+      });
+
+      const text = await upstream.text();
+      let parsed = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        parsed = null;
+      }
+
+      if (!upstream.ok) {
+        const detail =
+          parsed?.error?.message ?? parsed?.message ?? text.slice(0, 300) ?? "上游接口返回错误";
+        sendJson(response, 200, {
+          ok: false,
+          status: upstream.status,
+          error: String(detail)
+        });
+        return true;
+      }
+
+      const content = parsed?.choices?.[0]?.message?.content ?? "";
+      sendJson(response, 200, {
+        ok: true,
+        content: String(content),
+        model: parsed?.model ?? config.model,
+        usage: parsed?.usage ?? null
+      });
+    } catch (error) {
+      const aborted = error instanceof Error && error.name === "AbortError";
+      sendJson(response, 200, {
+        ok: false,
+        error: aborted ? "请求超时（120 秒）" : error instanceof Error ? error.message : "请求失败"
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+    return true;
+  }
+
+  sendJson(response, 404, { error: "未知接口" });
+  return true;
+}
+
 const MIME_TYPES = new Map(
   Object.entries({
     ".html": "text/html; charset=utf-8",
@@ -246,6 +463,13 @@ export function startServer({ root = "dist", port = 8737, open = true } = {}) {
       pathname = decodeURIComponent(url.pathname);
     } catch {
       response.writeHead(400).end("Bad Request");
+      return;
+    }
+
+    if (pathname.startsWith("/api/agent")) {
+      void handleAgentApi(request, response, pathname).catch((error) => {
+        sendJson(response, 500, { error: error instanceof Error ? error.message : "服务器内部错误" });
+      });
       return;
     }
 

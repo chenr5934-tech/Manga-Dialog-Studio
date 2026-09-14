@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import CanvasEditor, { CanvasEditorHandle } from "./components/CanvasEditor";
 import InspectorPanel from "./components/InspectorPanel";
+import AgentPanel from "./components/AgentPanel";
 import BubblePresetPanel from "./components/BubblePresetPanel";
 import ImportImagesModal from "./components/ImportImagesModal";
 import PresetEditorModal from "./components/PresetEditorModal";
@@ -16,6 +17,7 @@ export default function App() {
   const themeMode = useEditorStore((state) => state.themeMode);
   const notice = useEditorStore((state) => state.notice);
   const noticeHistory = useEditorStore((state) => state.noticeHistory);
+  const sidePanel = useEditorStore((state) => state.sidePanel);
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
   const deleteSelection = useEditorStore((state) => state.deleteSelection);
@@ -131,7 +133,7 @@ export default function App() {
           </div>
 
           <div className="min-h-0">
-            <InspectorPanel />
+            {sidePanel === "agent" ? <AgentPanel /> : <InspectorPanel />}
           </div>
 
           <div className="min-h-0">

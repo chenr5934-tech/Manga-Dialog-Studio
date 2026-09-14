@@ -82,6 +82,8 @@ type EditorStore = {
   importDialogOpen: boolean;
   presetLibraryOpen: boolean;
   templateLibraryOpen: boolean;
+  // 右侧栏显示属性检查器还是 Agent 面板
+  sidePanel: "inspector" | "agent";
   recentTextColors: string[];
   selection?: Selection;
   manualPanelMode: boolean;
@@ -114,6 +116,8 @@ type EditorStore = {
   movePage: (id: string, direction: "up" | "down") => void;
 
   splitGrid: (rows: number, cols: number) => void;
+  clearPanels: () => void;
+  clearBubbles: () => void;
   splitSelectedPanel: (rows: number, cols: number) => void;
   addDefaultPanel: () => void;
   createPanelFromRect: (x: number, y: number, width: number, height: number) => void;
@@ -128,6 +132,7 @@ type EditorStore = {
 
   addBubble: (type: BubbleType) => void;
 
+  setSidePanel: (panel: "inspector" | "agent") => void;
   setStoryboardMode: (mode: StoryboardMode) => void;
   openPresetEditor: (options?: { bubbleId?: string; seed?: BubblePreset }) => void;
   closePresetEditor: () => void;
@@ -1854,6 +1859,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   importDialogOpen: false,
   presetLibraryOpen: false,
   templateLibraryOpen: false,
+  sidePanel: "inspector",
   recentTextColors: getInitialRecentTextColors(),
   selection: undefined,
   manualPanelMode: false,
@@ -2149,6 +2155,50 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
       return {
         ...historyState
+      };
+    });
+  },
+
+  clearPanels: () => {
+    set((state) => {
+      const historyState = withHistory(
+        state,
+        updateActivePage(state.project, (page) => ({
+          ...page,
+          panels: []
+        })),
+        "已清空当前页分镜"
+      );
+
+      if (!historyState) {
+        return state;
+      }
+
+      return {
+        ...historyState,
+        selection: undefined
+      };
+    });
+  },
+
+  clearBubbles: () => {
+    set((state) => {
+      const historyState = withHistory(
+        state,
+        updateActivePage(state.project, (page) => ({
+          ...page,
+          bubbles: []
+        })),
+        "已清空当前页文字"
+      );
+
+      if (!historyState) {
+        return state;
+      }
+
+      return {
+        ...historyState,
+        selection: undefined
       };
     });
   },
@@ -2667,6 +2717,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         importDialogOpen: false
       };
     });
+  },
+
+  setSidePanel: (panel) => {
+    set(() => ({
+      sidePanel: panel
+    }));
   },
 
   setStoryboardMode: (mode) => {

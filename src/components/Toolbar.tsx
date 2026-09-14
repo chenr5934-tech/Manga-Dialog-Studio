@@ -61,6 +61,8 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
   const openPresetEditor = useEditorStore((state) => state.openPresetEditor);
   const openImportDialog = useEditorStore((state) => state.openImportDialog);
   const openTemplateLibrary = useEditorStore((state) => state.openTemplateLibrary);
+  const sidePanel = useEditorStore((state) => state.sidePanel);
+  const setSidePanel = useEditorStore((state) => state.setSidePanel);
   const saveProject = useEditorStore((state) => state.saveProject);
   const saveProjectAs = useEditorStore((state) => state.saveProjectAs);
   const loadProject = useEditorStore((state) => state.loadProject);
@@ -185,6 +187,16 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
             </button>
           </div>
         )}
+
+        <button
+          type="button"
+          data-agent-toggle="1"
+          className={`studio-btn h-7 px-2.5 text-xs ${sidePanel === "agent" ? "studio-btn-primary" : ""}`}
+          onClick={() => setSidePanel(sidePanel === "agent" ? "inspector" : "agent")}
+          title="Agent 模式：用一句话描述想要的排版，自动生成分镜与气泡"
+        >
+          Agent 模式
+        </button>
 
         <span className="ml-auto hidden text-[11px] text-[var(--text-secondary)] xl:block">
           {storyboardMode === "storyboard"
