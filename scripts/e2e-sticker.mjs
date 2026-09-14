@@ -317,11 +317,105 @@ const exportBlue = await page.evaluate(async () => {
 });
 record("贴纸进入导出图", typeof exportBlue === "number" && exportBlue > 200, "导出命中=" + exportBlue);
 
-// 9) 撤销应当整段回退
+// 9) 撤销应当把删掉的贴纸整段恢复
 await page.keyboard.down("Control");
 await page.keyboard.press("KeyZ");
 await page.keyboard.up("Control");
-await sleep(700);
+await sleep(800);
+const afterUndo = await page.evaluate(() => window.__colorBox(window.__composite(), [245, 158, 11]));
+record(
+  "撤销可以恢复被删掉的贴纸",
+  Boolean(afterUndo) && afterUndo.count > 500,
+  "撤销后星星像素=" + (afterUndo ? afterUndo.count : 0)
+);
+
+// 10) 项目往返：贴纸必须能存能读，未知 id 要被安全丢弃
+// sanitizeOverlays 只在加载路径上跑，这一步专门覆盖它
+const projectWithStickers = {
+  id: "sticker-roundtrip",
+  name: "贴纸往返",
+  activePageId: "sp1",
+  pages: [
+    {
+      id: "sp1",
+      name: "第 1 页",
+      canvas: { width: 1200, height: 800, preset: "custom", dpi: 300 },
+      backdropColor: "#ffffff",
+      panels: [],
+      bubbles: [],
+      overlays: [
+        { id: "s-heart", x: 60, y: 60, width: 240, height: 240, rotation: 0, image: "", sticker: { id: "heart", color: "#0ea5e9" } },
+        { id: "s-bogus", x: 340, y: 60, width: 240, height: 240, rotation: 0, image: "", sticker: { id: "not-a-real-sticker", color: "#000000" } },
+        { id: "s-star", x: 620, y: 60, width: 240, height: 240, rotation: 0, image: "", sticker: { id: "star", color: "#f59e0b" } }
+      ]
+    }
+  ]
+};
+
+await page.evaluate(() => {
+  Object.defineProperty(window, "showDirectoryPicker", {
+    value: undefined,
+    configurable: true,
+    writable: true
+  });
+});
+await clickByText("更多");
+await sleep(500);
+await clickByText("加载项目");
+await sleep(900);
+const injected = await page.evaluate((jsonText) => {
+  const candidates = Array.from(document.querySelectorAll('input[type="file"]')).filter(
+    (element) => typeof element.accept === "string" && element.accept.includes("json")
+  );
+  const input = candidates[candidates.length - 1];
+  if (!input) {
+    return "未找到加载用的 file input";
+  }
+  const transfer = new DataTransfer();
+  transfer.items.add(new File([jsonText], "sticker-project.json", { type: "application/json" }));
+  input.files = transfer.files;
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  return "已派发 change";
+}, JSON.stringify(projectWithStickers));
+void injected;
+await sleep(2800);
+
+const rtHeart = await page.evaluate(() => window.__colorBox(window.__composite(), [14, 165, 233]));
+const rtStar = await page.evaluate(() => window.__colorBox(window.__composite(), [245, 158, 11]));
+record(
+  "加载项目后贴纸仍在（sticker 字段没被归一化丢掉）",
+  Boolean(rtHeart) && rtHeart.count > 1200,
+  rtHeart ? "爱心像素=" + rtHeart.count : "贴纸丢失"
+);
+record(
+  "多张贴纸与各自颜色一起恢复",
+  Boolean(rtHeart) && Boolean(rtStar) && rtStar.count > 800,
+  "爱心=" + (rtHeart ? rtHeart.count : 0) + " 星星=" + (rtStar ? rtStar.count : 0)
+);
+
+const rtProbe = await page.evaluate(() => {
+  const shot = window.__composite();
+  const box = window.__colorBox(shot, [14, 165, 233]);
+  return box ? window.__probeRow(shot, [14, 165, 233], box, 0.12) : null;
+});
+record(
+  "恢复出来的仍是心形而不是别的形状",
+  Boolean(rtProbe) && !rtProbe.centerHit && rtProbe.leftHit && rtProbe.rightHit,
+  rtProbe ? "中心=" + rtProbe.centerHit + " 左=" + rtProbe.leftHit + " 右=" + rtProbe.rightHit : "无数据"
+);
+
+const bogus = await page.evaluate(() => window.__colorBox(window.__composite(), [0, 0, 0]));
+record(
+  "未知贴纸 id 被安全丢弃，不渲染也不报错",
+  !bogus || bogus.count < 200,
+  "黑色像素=" + (bogus ? bogus.count : 0)
+);
+
+const projectName = await page.evaluate(
+  () => document.querySelector('input[placeholder="项目名称"]')?.value ?? null
+);
+record("含贴纸的项目文件能正常加载", projectName === "贴纸往返", "项目名=" + projectName);
+
 record("运行期无控制台错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 
 await browser.close();
