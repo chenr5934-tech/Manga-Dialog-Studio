@@ -231,6 +231,55 @@ export function getStickerDef(id: string): StickerDef | undefined {
   return STICKER_MAP.get(id);
 }
 
+
+// 自定义贴纸：用户导入的图片。存在浏览器本地，也可以整体存进项目目录的 stickers/
+export type CustomSticker = {
+  id: string;
+  name: string;
+  image: string;
+  naturalWidth: number;
+  naturalHeight: number;
+};
+
+const CUSTOM_STICKER_KEY = "manga-dialog-studio:custom-stickers";
+
+export function normalizeCustomStickers(input: unknown): CustomSticker[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  return input
+    .filter((item) => item && typeof item.image === "string" && item.image.startsWith("data:image"))
+    .map((item) => ({
+      id: typeof item.id === "string" && item.id ? item.id : "custom-" + Math.random().toString(36).slice(2, 10),
+      name: typeof item.name === "string" && item.name.trim() ? item.name.trim() : "自定义贴纸",
+      image: item.image,
+      naturalWidth: Number.isFinite(item.naturalWidth) ? item.naturalWidth : 100,
+      naturalHeight: Number.isFinite(item.naturalHeight) ? item.naturalHeight : 100
+    }));
+}
+
+export function getInitialCustomStickers(): CustomSticker[] {
+  if (typeof localStorage === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = localStorage.getItem(CUSTOM_STICKER_KEY);
+    return raw ? normalizeCustomStickers(JSON.parse(raw)) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function persistCustomStickers(list: CustomSticker[]): void {
+  try {
+    localStorage.setItem(CUSTOM_STICKER_KEY, JSON.stringify(list));
+  } catch {
+    // 超出浏览器配额时静默失败，本次会话内存里的数据仍然可用
+  }
+}
+
 export function listStickerGroups(): { name: string; items: StickerDef[] }[] {
   const groups: { name: string; items: StickerDef[] }[] = [];
   for (const sticker of STICKERS) {

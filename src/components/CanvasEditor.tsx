@@ -953,9 +953,11 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
     const target = event.target;
     const onPanel = Boolean(target?.findAncestor?.(".panel-node", true));
     const onBubble = Boolean(target?.findAncestor?.(".bubble-node", true));
+    // 图片层与贴纸也要算进来：漏掉它会在按下的瞬间清空选中，拖拽过程中又没有 click 事件补回来
+    const onOverlay = Boolean(target?.findAncestor?.(".overlay-node", true));
     const onTransformer = Boolean(target?.findAncestor?.(".selection-transformer", true));
     const onSkewHandle = Boolean(target?.findAncestor?.(".panel-skew-handle", true) || target?.findAncestor?.(".panel-skew-overlay", true));
-    if (onPanel || onBubble || onTransformer || onSkewHandle) {
+    if (onPanel || onBubble || onOverlay || onTransformer || onSkewHandle) {
       return;
     }
 
@@ -1340,6 +1342,14 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                       });
                     }}
                   >
+                    {/* Konva 的命中检测按子节点进行：artwork 内部一律 listening=false，
+                        所以这里必须放一块（视觉上看不见的）命中区，否则整层点不中、拖不动 */}
+                    <Rect
+                      width={overlay.width}
+                      height={overlay.height}
+                      fill="rgba(0,0,0,0.001)"
+                      listening={!pickingMode}
+                    />
                     <OverlayArtwork overlay={overlay} />
                     {selected ? (
                       <Rect
@@ -1481,9 +1491,19 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                 rotateEnabled={
                   !isExporting && !pickingMode && (selection?.kind === "panel" || selection?.kind === "overlay")
                 }
-                resizeEnabled={!isExporting && !pickingMode && selection?.kind === "bubble"}
+                resizeEnabled={
+                  !isExporting && !pickingMode && (selection?.kind === "bubble" || selection?.kind === "overlay")
+                }
                 flipEnabled={false}
-                enabledAnchors={!isExporting && !pickingMode && selection?.kind === "bubble" ? BUBBLE_TRANSFORMER_ANCHORS : []}
+                enabledAnchors={
+                  !isExporting && !pickingMode
+                    ? selection?.kind === "bubble"
+                      ? BUBBLE_TRANSFORMER_ANCHORS
+                      : selection?.kind === "overlay"
+                        ? ALL_TRANSFORMER_ANCHORS
+                        : []
+                    : []
+                }
                 anchorSize={TRANSFORMER_ANCHOR_SIZE}
                 keepRatio={false}
                 anchorStyleFunc={styleTransformerAnchor}

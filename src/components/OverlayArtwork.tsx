@@ -23,12 +23,31 @@ function OverlayBitmap({ overlay }: { overlay: OverlayImage }) {
   );
 }
 
-// 贴纸分支：矢量路径，放大不会糊，换色也不需要重新生成任何图片数据
+// 自定义贴纸：用户导入的位图，按原图铺满
+function StickerBitmap({ url, width, height }: { url: string; width: number; height: number }) {
+  const [image] = useImage(url, "anonymous");
+
+  if (!image) {
+    return null;
+  }
+
+  return <KonvaImage image={image} x={0} y={0} width={width} height={height} listening={false} />;
+}
+
+// 贴纸分支：内置的走矢量路径（放大不会糊、换色即时），自定义的走位图
 function OverlaySticker({ overlay }: { overlay: OverlayImage }) {
   const sticker = overlay.sticker;
-  const def = sticker ? getStickerDef(sticker.id) : undefined;
 
-  if (!sticker || !def) {
+  if (!sticker) {
+    return null;
+  }
+
+  if (sticker.image) {
+    return <StickerBitmap url={sticker.image} width={overlay.width} height={overlay.height} />;
+  }
+
+  const def = getStickerDef(sticker.id);
+  if (!def) {
     return null;
   }
 

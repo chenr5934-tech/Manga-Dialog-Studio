@@ -215,6 +215,133 @@ record(
   "蓝色=" + (blueBox ? blueBox.count : 0) + " 残留红色=" + (redLeft ? redLeft.count : 0)
 );
 
+// 4b) 画布上的交互：拖拽、缩放、旋转
+const readOverlayFields = () =>
+  page.evaluate(() => {
+    const values = {};
+    for (const label of document.querySelectorAll("aside label")) {
+      const name = label.querySelector("span")?.innerText?.trim();
+      const input = label.querySelector("input");
+      if (name && input && typeof input.value === "string" && input.value !== "") {
+        const numeric = Number(input.value);
+        if (Number.isFinite(numeric)) {
+          values[name] = numeric;
+        }
+      }
+    }
+    return values;
+  });
+
+const toScreen = (cx, cy) =>
+  page.evaluate(
+    (targetX, targetY) => {
+      const el = document.querySelector(".studio-workspace canvas");
+      if (!el) {
+        return null;
+      }
+      const rect = el.getBoundingClientRect();
+      return {
+        x: rect.left + (targetX / el.width) * rect.width,
+        y: rect.top + (targetY / el.height) * rect.height
+      };
+    },
+    cx,
+    cy
+  );
+
+const beforeDrag = await readOverlayFields();
+const dragBox = await page.evaluate(() => window.__colorBox(window.__composite(), [14, 165, 233]));
+const dragFrom = await toScreen((dragBox.minX + dragBox.maxX) / 2, (dragBox.minY + dragBox.maxY) / 2);
+await page.mouse.move(dragFrom.x, dragFrom.y);
+await page.mouse.down();
+await page.mouse.move(dragFrom.x + 90, dragFrom.y + 70, { steps: 12 });
+await page.mouse.up();
+await sleep(700);
+const afterDrag = await readOverlayFields();
+record(
+  "贴纸可以在画布上直接拖拽",
+  Number.isFinite(afterDrag.X) &&
+    Number.isFinite(beforeDrag.X) &&
+    (Math.abs(afterDrag.X - beforeDrag.X) > 20 || Math.abs(afterDrag.Y - beforeDrag.Y) > 20),
+  "X " + beforeDrag.X + "→" + afterDrag.X + "  Y " + beforeDrag.Y + "→" + afterDrag.Y
+);
+
+// 手柄位置直接从画面上探测：心形底部是尖的，用像素包围盒的角点去找手柄会偏出命中范围
+const findHandles = () =>
+  page.evaluate(() => {
+    const canvases = Array.from(document.querySelectorAll(".studio-workspace canvas"));
+    const off = document.createElement("canvas");
+    off.width = canvases[0].width;
+    off.height = canvases[0].height;
+    const ctx = off.getContext("2d");
+    for (const item of canvases) {
+      ctx.drawImage(item, 0, 0, off.width, off.height);
+    }
+    const data = ctx.getImageData(0, 0, off.width, off.height).data;
+    const clusters = new Map();
+    for (let index = 0; index < data.length; index += 4) {
+      if (
+        Math.abs(data[index] - 191) < 10 &&
+        Math.abs(data[index + 1] - 219) < 10 &&
+        Math.abs(data[index + 2] - 254) < 10
+      ) {
+        const pixel = index / 4;
+        const x = pixel % off.width;
+        const y = (pixel - x) / off.width;
+        const key = Math.round(x / 12) + ":" + Math.round(y / 12);
+        const found = clusters.get(key) || { sx: 0, sy: 0, n: 0 };
+        found.sx += x;
+        found.sy += y;
+        found.n += 1;
+        clusters.set(key, found);
+      }
+    }
+    return Array.from(clusters.values())
+      .filter((entry) => entry.n >= 8)
+      .map((entry) => ({ x: entry.sx / entry.n, y: entry.sy / entry.n, n: entry.n }));
+  });
+
+const handles = await findHandles();
+record("选中后出现变换手柄", handles.length >= 4, "识别到 " + handles.length + " 个手柄");
+const bottomRight = handles.slice().sort((a, b) => a.y + a.x - (b.y + b.x)).pop();
+const corner = await toScreen(bottomRight.x, bottomRight.y);
+await page.mouse.move(corner.x, corner.y);
+await page.mouse.down();
+await page.mouse.move(corner.x + 80, corner.y + 80, { steps: 14 });
+await page.mouse.up();
+await sleep(700);
+const afterScale = await readOverlayFields();
+record(
+  "贴纸可以拖角缩放",
+  Number.isFinite(afterScale["宽度"]) &&
+    Number.isFinite(afterDrag["宽度"]) &&
+    afterScale["宽度"] > afterDrag["宽度"] + 10,
+  "宽度 " + afterDrag["宽度"] + "→" + afterScale["宽度"] + "  高度 " + afterDrag["高度"] + "→" + afterScale["高度"]
+);
+
+// 拖旋转手柄
+const handlesForRotate = await findHandles();
+const topMost = handlesForRotate.slice().sort((a, b) => b.y - a.y).pop();
+const rotationStart = await toScreen(topMost.x, topMost.y);
+let rotated = false;
+let rotationDetail = "";
+// topMost 本身就是旋转手柄，只在它附近做微小容错，避免点到相邻锚点
+for (const offset of [0, -5, 5, -10, 10]) {
+  const before = await readOverlayFields();
+  await page.mouse.move(rotationStart.x, rotationStart.y + offset);
+  await page.mouse.down();
+  await page.mouse.move(rotationStart.x + 70, rotationStart.y + offset + 80, { steps: 14 });
+  await page.mouse.up();
+  await sleep(600);
+  const after = await readOverlayFields();
+  rotationDetail = "偏移 " + offset + "px: 旋转 " + before["旋转"] + "→" + after["旋转"];
+  if (Number.isFinite(after["旋转"]) && Math.abs(after["旋转"] - before["旋转"]) > 3) {
+    rotated = true;
+    break;
+  }
+}
+record("贴纸可以拖手柄旋转", rotated, rotationDetail);
+
 // 5) 连续添加会错位，不会完全重叠
 await page.click("[data-hero-sticker]");
 await sleep(600);

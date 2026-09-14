@@ -335,8 +335,10 @@ export default function ImportImagesModal() {
           accept={IMAGE_FILE_ACCEPT}
           className="hidden"
           onChange={(event) => {
-            void addFiles(event.target.files);
+            // 先固化成数组再清空：FileList 是活引用，清空 value 会让它变空
+            const files = Array.from(event.target.files ?? []);
             event.target.value = "";
+            void addFiles(files);
           }}
         />
       </div>

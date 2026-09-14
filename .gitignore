@@ -3,9 +3,10 @@ dist/
 *.log
 *.tsbuildinfo
 
-# 预设与模板属于个人数据，保留目录说明与版本库整洁
+# 预设、模板与自定义贴纸属于个人数据，保留目录说明与版本库整洁
 presets/*.json
 templates/*.json
+stickers/*.json
 
 # Agent 配置含 API Key，绝不入库
 config/*.json

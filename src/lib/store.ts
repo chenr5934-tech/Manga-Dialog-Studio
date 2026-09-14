@@ -10,7 +10,12 @@ import {
   sanitizeRecentHexColors
 } from "./colors";
 import { shouldPreserveImageTransparency } from "./imageFormat";
-import { getStickerDef } from "./stickers";
+import {
+  CustomSticker,
+  getInitialCustomStickers,
+  getStickerDef,
+  persistCustomStickers
+} from "./stickers";
 import {
   clamp,
   normalizeBubbleSize,
@@ -85,6 +90,8 @@ type EditorStore = {
   presetLibraryOpen: boolean;
   templateLibraryOpen: boolean;
   stickerPickerOpen: boolean;
+  // 用户导入的自定义贴纸，随浏览器本地保存，也可整体存进 stickers/ 目录
+  customStickers: CustomSticker[];
   // 右侧栏显示属性检查器还是 Agent 面板
   sidePanel: "inspector" | "agent";
   // Agent 的作用范围：限定后 agent 只能在这个矩形内新增内容
@@ -162,6 +169,9 @@ type EditorStore = {
   openTemplateLibrary: () => void;
   openStickerPicker: () => void;
   closeStickerPicker: () => void;
+  addCustomStickers: (list: CustomSticker[]) => void;
+  removeCustomSticker: (id: string) => void;
+  replaceCustomStickers: (list: CustomSticker[]) => void;
   closeTemplateLibrary: () => void;
   buildTemplate: () => string;
   applyTemplate: (json: string) => void;
@@ -1391,6 +1401,26 @@ function sanitizePanelPoints(points: Panel["points"]): Panel["points"] {
   return safe.length >= 3 ? safe : undefined;
 }
 
+// 贴纸引用：内置看 id，自定义带自己的图片数据
+function sanitizeStickerRef(ref: OverlayImage["sticker"]): OverlayImage["sticker"] {
+  if (!ref || typeof ref.id !== "string") {
+    return undefined;
+  }
+
+  const builtin = getStickerDef(ref.id);
+  if (!builtin && typeof ref.image !== "string") {
+    return undefined;
+  }
+
+  return {
+    id: ref.id,
+    color: typeof ref.color === "string" ? ref.color : undefined,
+    image: typeof ref.image === "string" ? ref.image : undefined,
+    naturalWidth: Number.isFinite(ref.naturalWidth) ? ref.naturalWidth : undefined,
+    naturalHeight: Number.isFinite(ref.naturalHeight) ? ref.naturalHeight : undefined
+  };
+}
+
 // 叠加层只保留结构合法且图片可用的项
 function sanitizeOverlays(list: OverlayImage[] | undefined): OverlayImage[] | undefined {
   if (!Array.isArray(list)) {
@@ -1402,9 +1432,9 @@ function sanitizeOverlays(list: OverlayImage[] | undefined): OverlayImage[] | un
       if (!item) {
         return false;
       }
-      // 贴纸只带内置 id，没有 image 数据，按贴纸规则校验
+      // 内置贴纸没有 image 数据，按 id 校验；自定义贴纸则看它自带的图片
       if (typeof item.sticker?.id === "string") {
-        return Boolean(getStickerDef(item.sticker.id));
+        return Boolean(getStickerDef(item.sticker.id)) || typeof item.sticker.image === "string";
       }
       return typeof item.image === "string" && isLocalImageRef(item.image);
     })
@@ -1422,13 +1452,7 @@ function sanitizeOverlays(list: OverlayImage[] | undefined): OverlayImage[] | un
       image: item.image,
       naturalWidth: Number.isFinite(item.naturalWidth) ? item.naturalWidth : undefined,
       naturalHeight: Number.isFinite(item.naturalHeight) ? item.naturalHeight : undefined,
-      sticker:
-        item.sticker && typeof item.sticker.id === "string" && getStickerDef(item.sticker.id)
-          ? {
-              id: item.sticker.id,
-              color: typeof item.sticker.color === "string" ? item.sticker.color : undefined
-            }
-          : undefined
+      sticker: sanitizeStickerRef(item.sticker)
     }));
 
   return safe.length > 0 ? safe : undefined;
@@ -1929,6 +1953,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   presetLibraryOpen: false,
   templateLibraryOpen: false,
   stickerPickerOpen: false,
+  customStickers: getInitialCustomStickers(),
   sidePanel: "inspector",
   agentScope: null,
   agentScopePicking: false,
@@ -2495,30 +2520,51 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   addStickerOverlay: (stickerId, color) => {
-    const def = getStickerDef(stickerId);
-    if (!def) {
-      return;
-    }
-
     set((state) => {
+      const def = getStickerDef(stickerId);
+      // 内置贴纸查表，自定义贴纸存在用户自己的列表里
+      const custom = def ? undefined : state.customStickers.find((item) => item.id === stickerId);
+      if (!def && !custom) {
+        return state;
+      }
+
       const activePage = getActivePage(state.project);
       const canvas = activePage.canvas;
       const size = Math.round(Math.min(canvas.width, canvas.height) * 0.18);
+
+      // 内置贴纸是正方形；自定义贴纸按原图比例摆放，不拉伸变形
+      let width = size;
+      let height = size;
+      if (custom && custom.naturalWidth > 0 && custom.naturalHeight > 0) {
+        const ratio = custom.naturalHeight / custom.naturalWidth;
+        if (ratio >= 1) {
+          height = size;
+          width = Math.max(24, Math.round(size / ratio));
+        } else {
+          width = size;
+          height = Math.max(24, Math.round(size * ratio));
+        }
+      }
+
       // 连续添加时逐个小幅错位，否则新贴纸会完全盖住上一张，看不出加了几张
       const shift = ((activePage.overlays ?? []).length % 6) * Math.round(size * 0.16);
 
       const overlay: OverlayImage = {
         id: uuidv4(),
-        x: Math.round((canvas.width - size) / 2 + shift),
-        y: Math.round((canvas.height - size) / 2 + shift),
-        width: size,
-        height: size,
+        x: Math.round((canvas.width - width) / 2 + shift),
+        y: Math.round((canvas.height - height) / 2 + shift),
+        width,
+        height,
         rotation: 0,
         image: "",
-        sticker: {
-          id: def.id,
-          color: color ?? def.defaultColor
-        }
+        sticker: def
+          ? { id: def.id, color: color ?? def.defaultColor }
+          : {
+            id: custom ? custom.id : stickerId,
+            image: custom ? custom.image : "",
+            naturalWidth: custom ? custom.naturalWidth : undefined,
+            naturalHeight: custom ? custom.naturalHeight : undefined
+          }
       };
 
       const historyState = withHistory(
@@ -2877,6 +2923,33 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set(() => ({
       stickerPickerOpen: true
     }));
+  },
+
+  addCustomStickers: (list) => {
+    if (!Array.isArray(list) || list.length === 0) {
+      return;
+    }
+
+    set((state) => {
+      const merged = [...state.customStickers, ...list];
+      persistCustomStickers(merged);
+      return { customStickers: merged };
+    });
+  },
+
+  removeCustomSticker: (id) => {
+    set((state) => {
+      const next = state.customStickers.filter((item) => item.id !== id);
+      persistCustomStickers(next);
+      return { customStickers: next };
+    });
+  },
+
+  replaceCustomStickers: (list) => {
+    set(() => {
+      persistCustomStickers(list);
+      return { customStickers: list };
+    });
   },
 
   closeStickerPicker: () => {
