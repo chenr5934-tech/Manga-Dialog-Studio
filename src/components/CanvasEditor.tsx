@@ -4,6 +4,7 @@ import { Circle, Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Shape, 
 import useImage from "use-image";
 import { Bubble, OverlayImage, Panel, PanelPoint, ProjectPage } from "../types";
 import { shouldPreserveImageTransparency } from "../lib/imageFormat";
+import OverlayArtwork from "./OverlayArtwork";
 import {
   PANEL_EDGE_HANDLE_KEYS,
   PANEL_SHAPE_HANDLE_KEYS,
@@ -121,26 +122,6 @@ function PageBackgroundLayer({ page }: { page: ProjectPage }) {
       y={0}
       width={page.canvas.width}
       height={page.canvas.height}
-      listening={false}
-    />
-  );
-}
-
-// 叠加层：浮在分镜之上、气泡之下的独立图片，用来做前景元素
-function OverlayImageLayer({ overlay }: { overlay: OverlayImage }) {
-  const [image] = useImage(overlay.image, "anonymous");
-
-  if (!image) {
-    return null;
-  }
-
-  return (
-    <KonvaImage
-      image={image}
-      x={0}
-      y={0}
-      width={overlay.width}
-      height={overlay.height}
       listening={false}
     />
   );
@@ -1359,7 +1340,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                       });
                     }}
                   >
-                    <OverlayImageLayer overlay={overlay} />
+                    <OverlayArtwork overlay={overlay} />
                     {selected ? (
                       <Rect
                         width={overlay.width}

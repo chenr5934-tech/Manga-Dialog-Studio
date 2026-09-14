@@ -10,6 +10,7 @@ import {
   sanitizeRecentHexColors
 } from "./colors";
 import { shouldPreserveImageTransparency } from "./imageFormat";
+import { getStickerDef } from "./stickers";
 import {
   clamp,
   normalizeBubbleSize,
@@ -83,6 +84,7 @@ type EditorStore = {
   importDialogOpen: boolean;
   presetLibraryOpen: boolean;
   templateLibraryOpen: boolean;
+  stickerPickerOpen: boolean;
   // 右侧栏显示属性检查器还是 Agent 面板
   sidePanel: "inspector" | "agent";
   // Agent 的作用范围：限定后 agent 只能在这个矩形内新增内容
@@ -131,6 +133,7 @@ type EditorStore = {
   selectBubble: (id: string) => void;
   selectOverlay: (id: string) => void;
 
+  addStickerOverlay: (stickerId: string, color?: string) => void;
   addOverlayImage: (input: {
     image: string;
     naturalWidth: number;
@@ -157,6 +160,8 @@ type EditorStore = {
   closePresetLibrary: () => void;
 
   openTemplateLibrary: () => void;
+  openStickerPicker: () => void;
+  closeStickerPicker: () => void;
   closeTemplateLibrary: () => void;
   buildTemplate: () => string;
   applyTemplate: (json: string) => void;
@@ -1393,7 +1398,16 @@ function sanitizeOverlays(list: OverlayImage[] | undefined): OverlayImage[] | un
   }
 
   const safe = list
-    .filter((item) => item && typeof item.image === "string" && isLocalImageRef(item.image))
+    .filter((item) => {
+      if (!item) {
+        return false;
+      }
+      // 贴纸只带内置 id，没有 image 数据，按贴纸规则校验
+      if (typeof item.sticker?.id === "string") {
+        return Boolean(getStickerDef(item.sticker.id));
+      }
+      return typeof item.image === "string" && isLocalImageRef(item.image);
+    })
     .map((item) => ({
       id: item.id || uuidv4(),
       x: Number.isFinite(item.x) ? item.x : 100,
@@ -1407,7 +1421,14 @@ function sanitizeOverlays(list: OverlayImage[] | undefined): OverlayImage[] | un
           : undefined,
       image: item.image,
       naturalWidth: Number.isFinite(item.naturalWidth) ? item.naturalWidth : undefined,
-      naturalHeight: Number.isFinite(item.naturalHeight) ? item.naturalHeight : undefined
+      naturalHeight: Number.isFinite(item.naturalHeight) ? item.naturalHeight : undefined,
+      sticker:
+        item.sticker && typeof item.sticker.id === "string" && getStickerDef(item.sticker.id)
+          ? {
+              id: item.sticker.id,
+              color: typeof item.sticker.color === "string" ? item.sticker.color : undefined
+            }
+          : undefined
     }));
 
   return safe.length > 0 ? safe : undefined;
@@ -1907,6 +1928,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   importDialogOpen: false,
   presetLibraryOpen: false,
   templateLibraryOpen: false,
+  stickerPickerOpen: false,
   sidePanel: "inspector",
   agentScope: null,
   agentScopePicking: false,
@@ -2472,6 +2494,53 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
+  addStickerOverlay: (stickerId, color) => {
+    const def = getStickerDef(stickerId);
+    if (!def) {
+      return;
+    }
+
+    set((state) => {
+      const activePage = getActivePage(state.project);
+      const canvas = activePage.canvas;
+      const size = Math.round(Math.min(canvas.width, canvas.height) * 0.18);
+      // 连续添加时逐个小幅错位，否则新贴纸会完全盖住上一张，看不出加了几张
+      const shift = ((activePage.overlays ?? []).length % 6) * Math.round(size * 0.16);
+
+      const overlay: OverlayImage = {
+        id: uuidv4(),
+        x: Math.round((canvas.width - size) / 2 + shift),
+        y: Math.round((canvas.height - size) / 2 + shift),
+        width: size,
+        height: size,
+        rotation: 0,
+        image: "",
+        sticker: {
+          id: def.id,
+          color: color ?? def.defaultColor
+        }
+      };
+
+      const historyState = withHistory(
+        state,
+        updateActivePage(state.project, (page) => ({
+          ...page,
+          overlays: [...(page.overlays ?? []), overlay]
+        })),
+        "已添加贴纸"
+      );
+
+      if (!historyState) {
+        return state;
+      }
+
+      return {
+        ...historyState,
+        selection: { kind: "overlay", id: overlay.id }
+      };
+    });
+  },
+
   addOverlayImage: ({ image, naturalWidth, naturalHeight }) => {
     set((state) => {
       const activePage = getActivePage(state.project);
@@ -2801,6 +2870,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   closeTemplateLibrary: () => {
     set(() => ({
       templateLibraryOpen: false
+    }));
+  },
+
+  openStickerPicker: () => {
+    set(() => ({
+      stickerPickerOpen: true
+    }));
+  },
+
+  closeStickerPicker: () => {
+    set(() => ({
+      stickerPickerOpen: false
     }));
   },
 

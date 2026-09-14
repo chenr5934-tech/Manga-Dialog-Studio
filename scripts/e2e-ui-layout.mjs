@@ -64,8 +64,8 @@ const topLabels = topRow.buttons.map((item) => item.text);
 const secondLabels = secondRow.buttons.map((item) => item.text);
 
 record(
-  "第一行集中四个高频主操作",
-  ["导入图片", "模板", "导出", "Agent 模式"].every((label) => topLabels.includes(label)),
+  "第一行集中高频主操作",
+  ["导入图片", "贴纸", "模板", "导出", "Agent 模式"].every((label) => topLabels.includes(label)),
   topLabels.filter(Boolean).join(" / ")
 );
 record(
@@ -76,7 +76,7 @@ record(
 record(
   "主操作按钮达到可点尺寸",
   topRow.buttons
-    .filter((item) => ["导入图片", "模板", "导出", "Agent 模式"].includes(item.text))
+    .filter((item) => ["导入图片", "贴纸", "模板", "导出", "Agent 模式"].includes(item.text))
     .every((item) => item.height >= 32 && item.width >= 48),
   topRow.buttons
     .filter((item) => ["导入图片", "模板", "导出", "Agent 模式"].includes(item.text))

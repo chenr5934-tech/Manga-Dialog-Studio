@@ -71,6 +71,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
   const setBackdropColor = useEditorStore((state) => state.setBackdropColor);
   const openImportDialog = useEditorStore((state) => state.openImportDialog);
   const openTemplateLibrary = useEditorStore((state) => state.openTemplateLibrary);
+  const openStickerPicker = useEditorStore((state) => state.openStickerPicker);
   const sidePanel = useEditorStore((state) => state.sidePanel);
   const setSidePanel = useEditorStore((state) => state.setSidePanel);
   const saveProject = useEditorStore((state) => state.saveProject);
@@ -173,6 +174,15 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
           title="按顺序多选导入漫画原稿图片，每张图片成为一个页面"
         >
           导入图片
+        </button>
+        <button
+          type="button"
+          data-hero-sticker="1"
+          className={heroButtonClass}
+          onClick={() => openStickerPicker()}
+          title="打开贴纸面板，单击即可把爱心、星星等贴纸加到画面"
+        >
+          贴纸
         </button>
         <button
           type="button"

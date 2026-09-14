@@ -33,6 +33,7 @@ import {
   toSliderValue
 } from "../lib/project";
 import { getActivePage, useEditorStore } from "../lib/store";
+import { getStickerDef } from "../lib/stickers";
 import { resolveBubbleOpacity } from "./BubbleVisual";
 import BackgroundRemoverModal from "./BackgroundRemoverModal";
 
@@ -57,6 +58,19 @@ const cropHandleClass =
 const cropCornerHandleClass =
   "absolute z-10 h-5 w-5 -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-sm border-2 border-white bg-cyan-500 shadow-[0_1px_4px_rgba(8,47,73,0.45)] active:cursor-grabbing";
 const TRANSPARENT_BUBBLE_BACKGROUND = "rgba(255,255,255,0)";
+// 贴纸常用配色，先给一排快选，需要精确颜色时再用取色器
+const STICKER_COLORS = [
+  "#ef4444",
+  "#f97316",
+  "#fbbf24",
+  "#22c55e",
+  "#0ea5e9",
+  "#6366f1",
+  "#a855f7",
+  "#ec4899",
+  "#ffffff",
+  "#111827"
+];
 const WHITE_BUBBLE_BACKGROUND = "#ffffff";
 const TRANSPARENCY_GRID_STYLE = {
   backgroundColor: "#ffffff",
@@ -1291,16 +1305,24 @@ function OverlayInspector({ overlay }: { overlay: OverlayImage }) {
   const updateOverlay = useEditorStore((state) => state.updateOverlay);
   const deleteOverlay = useEditorStore((state) => state.deleteOverlay);
   const currentOpacity = typeof overlay.opacity === "number" ? overlay.opacity : 1;
+  const stickerDef = overlay.sticker ? getStickerDef(overlay.sticker.id) : undefined;
+  const stickerColor = overlay.sticker?.color ?? stickerDef?.defaultColor ?? "#ef4444";
 
   return (
     <div className="space-y-3">
       <div className={sectionClass}>
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)]">图片层</h3>
-          <span className="studio-chip px-2.5 py-1 text-[11px]">Overlay</span>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+            {stickerDef ? "贴纸" : "图片层"}
+          </h3>
+          <span className="studio-chip px-2.5 py-1 text-[11px]">
+            {stickerDef ? stickerDef.name : "Overlay"}
+          </span>
         </div>
         <p className="text-xs leading-5 text-[var(--text-secondary)]">
-          这一层浮在分镜之上、气泡之下，用来做前景元素或贴图，让画面更有层次。可以直接在画布上拖动、缩放与旋转。
+          {stickerDef
+            ? "贴纸是矢量图形，放到多大都不会糊。可以在画布上直接拖动、缩放与旋转，下面还能换颜色。"
+            : "这一层浮在分镜之上、气泡之下，用来做前景元素或贴图，让画面更有层次。可以直接在画布上拖动、缩放与旋转。"}
         </p>
       </div>
 
@@ -1325,6 +1347,45 @@ function OverlayInspector({ overlay }: { overlay: OverlayImage }) {
           onChange={(value) => updateOverlay(overlay.id, { rotation: value })}
         />
       </div>
+
+      {stickerDef ? (
+        <div className={sectionClass}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">贴纸颜色</h3>
+            <span className="studio-chip px-2.5 py-1 text-[11px]">{stickerColor.toUpperCase()}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {STICKER_COLORS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                data-sticker-color={option}
+                aria-label={"颜色 " + option}
+                className={getColorSwatchButtonClass(stickerColor.toLowerCase() === option.toLowerCase())}
+                style={{ background: option }}
+                onClick={() => {
+                  if (!overlay.sticker) {
+                    return;
+                  }
+                  updateOverlay(overlay.id, { sticker: { id: overlay.sticker.id, color: option } });
+                }}
+              />
+            ))}
+            <input
+              type="color"
+              data-sticker-color-input="1"
+              className={colorInputClass}
+              value={stickerColor}
+              onChange={(event) => {
+                if (!overlay.sticker) {
+                  return;
+                }
+                updateOverlay(overlay.id, { sticker: { id: overlay.sticker.id, color: event.target.value } });
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
 
       <div className={sectionClass}>
         <div className="flex items-center justify-between">

@@ -122,7 +122,13 @@ export type BubblePreset = {
   opacity?: number;
 };
 
-// 叠加图片层：浮在分镜之上、气泡之下，用来做前景元素增加层次
+// 贴纸引用：只记录内置贴纸 id 与颜色，不存图片数据，项目文件不会因此膨胀
+export type StickerRef = {
+  id: string;
+  color?: string;
+};
+
+// 叠加层：浮在分镜之上、气泡之下。图片层用 image，贴纸用 sticker，二者必有其一
 export type OverlayImage = {
   id: string;
   x: number;
@@ -134,6 +140,7 @@ export type OverlayImage = {
   image: string;
   naturalWidth?: number;
   naturalHeight?: number;
+  sticker?: StickerRef;
 };
 
 export type StoryboardMode = "storyboard" | "dialogue";

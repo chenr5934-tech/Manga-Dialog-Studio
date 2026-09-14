@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Group, Image as KonvaImage, Layer, Rect, Shape, Stage } from "react-konva";
 import useImage from "use-image";
-import { OverlayImage, Panel, ProjectPage } from "../types";
+import { Panel, ProjectPage } from "../types";
 import { shouldPreserveImageTransparency } from "../lib/imageFormat";
+import OverlayArtwork from "./OverlayArtwork";
 import { getPanelRenderTransform } from "../lib/panelGeometry";
 import { drawPanelPath, getPanelImageLayout } from "../lib/panelRender";
 import { DEFAULT_BACKDROP_COLOR } from "../lib/project";
@@ -86,16 +87,6 @@ function PreviewPanelImage({ panel }: { panel: Panel }) {
   );
 }
 
-function OverlayThumbImage({ overlay }: { overlay: OverlayImage }) {
-  const [image] = useImage(overlay.image, "anonymous");
-  if (!image) {
-    return null;
-  }
-  return (
-    <KonvaImage image={image} x={0} y={0} width={overlay.width} height={overlay.height} listening={false} />
-  );
-}
-
 function PageThumbnail({ page }: { page: ProjectPage }) {
   const [backgroundImage] = useImage(page.background?.original ?? "", "anonymous");
 
@@ -171,7 +162,7 @@ function PageThumbnail({ page }: { page: ProjectPage }) {
             opacity={overlay.opacity ?? 1}
             listening={false}
           >
-            <OverlayThumbImage overlay={overlay} />
+            <OverlayArtwork overlay={overlay} />
           </Group>
         ))}
 
