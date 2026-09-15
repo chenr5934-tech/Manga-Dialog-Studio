@@ -22,6 +22,8 @@ export default function App() {
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
   const deleteSelection = useEditorStore((state) => state.deleteSelection);
+  const deletePage = useEditorStore((state) => state.deletePage);
+  const activePageId = useEditorStore((state) => state.project.activePageId);
 
   const canvasEditorRef = useRef<CanvasEditorHandle | null>(null);
   const noticeBarRef = useRef<HTMLDivElement | null>(null);
@@ -84,13 +86,21 @@ export default function App() {
       }
 
       if (event.key === "Delete" || event.key === "Backspace") {
+        // 焦点在胶片栏里时，Delete 删的是整页；否则删画布上选中的对象。
+        // 两处都用这一颗键，靠焦点位置区分。
+        const focused = document.activeElement;
+        if (focused instanceof HTMLElement && focused.closest("[data-thumb-rail]")) {
+          event.preventDefault();
+          deletePage(activePageId);
+          return;
+        }
         deleteSelection();
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [deleteSelection, redo, undo]);
+  }, [activePageId, deletePage, deleteSelection, redo, undo]);
 
   useEffect(() => {
     if (typeof document === "undefined") {

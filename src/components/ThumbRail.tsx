@@ -276,6 +276,7 @@ export default function ThumbRail() {
 
   return (
     <aside
+      data-thumb-rail="1"
       className="studio-surface flex h-full min-h-0 flex-col overflow-hidden"
       style={{ width: RAIL_WIDTH }}
     >
