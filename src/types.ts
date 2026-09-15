@@ -198,6 +198,9 @@ export type ProjectPage = {
   backdropColor?: string;
   // 页面底图（导入的漫画原稿），铺满整页画布
   background?: PanelImage;
+  // 统一的层序：从最底层到最顶层排列 id。
+  // 不存则按「分镜 → 图片层与贴纸 → 气泡」的默认顺序推导（老项目的行为）
+  layerOrder?: string[];
 };
 
 export type Project = {

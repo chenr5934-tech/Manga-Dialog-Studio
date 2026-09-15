@@ -253,6 +253,7 @@ export default function ThumbRail() {
               key={page.id}
               type="button"
               data-thumb-index={index}
+              data-page-thumb={page.id}
               onClick={() => setActivePage(page.id)}
               title={`${page.name} · 分镜 ${page.panels.length} · 文字 ${page.bubbles.length}`}
               className={`thumb-card group relative flex w-full flex-col items-center gap-1 rounded-lg p-1.5 transition ${

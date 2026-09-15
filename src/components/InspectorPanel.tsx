@@ -1510,6 +1510,9 @@ export default function InspectorPanel() {
   const activePage = useEditorStore((state) => getActivePage(state.project));
   const selection = useEditorStore((state) => state.selection);
   const deleteSelection = useEditorStore((state) => state.deleteSelection);
+  const setSidePanel = useEditorStore((state) => state.setSidePanel);
+
+  const moveLayer = useEditorStore((state) => state.moveLayer);
 
   const selectedPanel =
     selection?.kind === "panel" ? activePage.panels.find((panel) => panel.id === selection.id) : undefined;
@@ -1522,8 +1525,17 @@ export default function InspectorPanel() {
 
   return (
     <aside className={containerClass}>
-      <div className="mb-4">
+      <div className="mb-4 flex items-start justify-between gap-2">
         <h2 className="text-lg font-semibold text-[var(--text-primary)]">属性检查器</h2>
+        <button
+          type="button"
+          data-open-layers="1"
+          className="studio-btn h-8 shrink-0 px-3 text-xs"
+          title="列出画布上的所有内容，可以直接点选被挡住的东西，也能调层级"
+          onClick={() => setSidePanel("layers")}
+        >
+          画布内容
+        </button>
       </div>
 
       {!selection && (
@@ -1538,6 +1550,27 @@ export default function InspectorPanel() {
 
       {selection ? (
         <div className="mt-4 border-t border-[var(--line-soft)] pt-3">
+          <p className="mb-1.5 text-[11px] text-[var(--text-secondary)]">层级顺序</p>
+          <div className="mb-3 grid grid-cols-4 gap-1.5">
+            {(
+              [
+                ["top", "置顶"],
+                ["up", "上移"],
+                ["down", "下移"],
+                ["bottom", "置底"]
+              ] as const
+            ).map(([move, label]) => (
+              <button
+                key={move}
+                type="button"
+                data-layer-action={move}
+                className="studio-btn h-8 px-1 text-[11px]"
+                onClick={() => moveLayer(selection.id, move)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             data-delete-selection="1"

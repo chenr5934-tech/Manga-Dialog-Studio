@@ -17,6 +17,14 @@ import {
   persistCustomStickers
 } from "./stickers";
 import { hashImage, persistUploadLibrary, UploadedImage } from "./uploads";
+import { LayerMove, moveLayerInOrder, resolveLayerOrder } from "./layers";
+
+const LAYER_MOVE_LABEL: Record<LayerMove, string> = {
+  up: "上移一层",
+  down: "下移一层",
+  top: "置于顶层",
+  bottom: "置于底层"
+};
 import {
   clamp,
   normalizeBubbleSize,
@@ -98,7 +106,7 @@ type EditorStore = {
   // 用户手动从「已导入图片」列表里移除过的图（存 hash），项目里还在用也不显示
   hiddenPoolImages: string[];
   // 右侧栏显示属性检查器还是 Agent 面板
-  sidePanel: "inspector" | "agent";
+  sidePanel: "inspector" | "agent" | "layers";
   // Agent 的作用范围：限定后 agent 只能在这个矩形内新增内容
   agentScope: { x: number; y: number; width: number; height: number } | null;
   agentScopePicking: boolean;
@@ -175,7 +183,7 @@ type EditorStore = {
 
   addBubble: (type: BubbleType) => void;
 
-  setSidePanel: (panel: "inspector" | "agent") => void;
+  setSidePanel: (panel: "inspector" | "agent" | "layers") => void;
   setAgentScope: (scope: { x: number; y: number; width: number; height: number } | null) => void;
   toggleAgentScopePicking: (enabled?: boolean) => void;
   setStoryboardMode: (mode: StoryboardMode) => void;
@@ -192,6 +200,8 @@ type EditorStore = {
   setUploadedImages: (list: UploadedImage[]) => void;
   addUploadedImages: (list: UploadedImage[]) => void;
   setHiddenPoolImages: (list: string[]) => void;
+  // 层序调整：上移 / 下移 / 置顶 / 置底
+  moveLayer: (id: string, move: LayerMove) => void;
   // 从 uploads/ 库里真正删掉常驻副本
   removeUploadedImages: (ids: string[]) => void;
   // 把项目里正在用的图从列表移除（只是不显示，不动画面）
@@ -3009,6 +3019,24 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   setHiddenPoolImages: (list) => {
     set({ hiddenPoolImages: list });
+  },
+
+  moveLayer: (id, move) => {
+    set((state) => {
+      const activePage = getActivePage(state.project);
+      const order = resolveLayerOrder(activePage);
+      const next = moveLayerInOrder(order, id, move);
+      if (!next) {
+        return state;
+      }
+
+      const historyState = withHistory(
+        state,
+        updateActivePage(state.project, (page) => ({ ...page, layerOrder: next })),
+        LAYER_MOVE_LABEL[move]
+      );
+      return historyState ?? state;
+    });
   },
 
   removeUploadedImages: (ids) => {

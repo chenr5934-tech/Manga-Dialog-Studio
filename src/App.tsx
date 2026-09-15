@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import CanvasEditor, { CanvasEditorHandle } from "./components/CanvasEditor";
 import InspectorPanel from "./components/InspectorPanel";
 import AgentPanel from "./components/AgentPanel";
+import LayerPanel from "./components/LayerPanel";
 import LeftToolPanel from "./components/LeftToolPanel";
 import ImportImagesModal from "./components/ImportImagesModal";
 import PresetEditorModal from "./components/PresetEditorModal";
@@ -143,7 +144,13 @@ export default function App() {
           </div>
 
           <div className="min-h-0">
-            {sidePanel === "agent" ? <AgentPanel /> : <InspectorPanel />}
+            {sidePanel === "agent" ? (
+              <AgentPanel />
+            ) : sidePanel === "layers" ? (
+              <LayerPanel />
+            ) : (
+              <InspectorPanel />
+            )}
           </div>
 
           <div className="min-h-0">

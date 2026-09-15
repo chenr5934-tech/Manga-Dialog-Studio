@@ -26,6 +26,7 @@ import { drawPanelPath, getPanelImageLayout } from "../lib/panelRender";
 import { DEFAULT_BACKDROP_COLOR, normalizeBubbleSize } from "../lib/project";
 import { POOLED_IMAGE_DND_MIME, PRESET_DND_MIME, STICKER_DND_MIME } from "../lib/dnd";
 import { findPooledImage } from "../lib/imagePool";
+import { resolveLayerOrder } from "../lib/layers";
 import { isPointInsidePanel } from "../lib/panelGeometry";
 import { getActivePage, useEditorStore } from "../lib/store";
 import { BubbleShapeLayer, BubbleTextLayer, resolveBubbleOpacity } from "./BubbleVisual";
@@ -610,6 +611,12 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
   const addStickerOverlay = useEditorStore((state) => state.addStickerOverlay);
   const addOverlayImage = useEditorStore((state) => state.addOverlayImage);
   const uploadedImages = useEditorStore((state) => state.uploadedImages);
+  // 统一层序：Konva 按 zIndex 排子节点，所以不必重排 JSX 结构
+  const layerOrder = resolveLayerOrder(activePage);
+  const zIndexOf = (id: string) => {
+    const index = layerOrder.indexOf(id);
+    return index < 0 ? 0 : index + 1;
+  };
   const applyImageToPanel = useEditorStore((state) => state.applyImageToPanel);
   const createEllipsePanelFromRect = useEditorStore((state) => state.createEllipsePanelFromRect);
   const addBubbleFromPreset = useEditorStore((state) => state.addBubbleFromPreset);
@@ -1396,6 +1403,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                     <Group
                       id={`panel-${panel.id}`}
                       name="panel-node"
+                      zIndex={zIndexOf(panel.id)}
                       x={transform.x}
                       y={transform.y}
                       width={displayPanel.width}
@@ -1495,6 +1503,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                     key={overlay.id}
                     id={`overlay-${overlay.id}`}
                     name="overlay-node"
+                    zIndex={zIndexOf(overlay.id)}
                     x={overlay.x + overlay.width / 2}
                     y={overlay.y + overlay.height / 2}
                     width={overlay.width}
@@ -1564,6 +1573,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                     key={bubble.id}
                     id={`bubble-${bubble.id}`}
                     name="bubble-node"
+                    zIndex={zIndexOf(bubble.id)}
                     x={bubble.x}
                     y={bubble.y}
                     width={bubble.width}
