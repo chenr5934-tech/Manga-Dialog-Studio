@@ -22,21 +22,15 @@ import {
 import { clampOpacity, clampTextBox, normalizePreset } from "./presets";
 
 export const CANVAS_PRESETS: Record<CanvasPreset, { width: number; height: number; dpi: number }> = {
-  A4: {
-    width: 2480,
-    height: 3508,
-    dpi: 300
-  },
-  A3: {
-    width: 3508,
-    height: 4961,
-    dpi: 300
-  },
-  custom: {
-    width: 1600,
-    height: 2400,
-    dpi: 300
-  }
+  A4: { width: 2480, height: 3508, dpi: 300 },
+  "A4-landscape": { width: 3508, height: 2480, dpi: 300 },
+  A3: { width: 3508, height: 4961, dpi: 300 },
+  B5: { width: 2079, height: 2953, dpi: 300 },
+  webtoon: { width: 1200, height: 2400, dpi: 150 },
+  square: { width: 2048, height: 2048, dpi: 300 },
+  phone: { width: 1080, height: 1920, dpi: 150 },
+  hd: { width: 1920, height: 1080, dpi: 150 },
+  custom: { width: 1600, height: 2400, dpi: 300 }
 };
 
 export const DEFAULT_BACKDROP_COLOR = "#ffffff";
@@ -62,11 +56,13 @@ export function toSliderValue(value: number): number {
 }
 
 export function createCanvasFromPreset(preset: CanvasPreset = "A4"): CanvasConfig {
-  const picked = CANVAS_PRESETS[preset];
+  // 旧项目文件里可能存着已经改名或废弃的预设名，兜底到 A4，别让加载直接崩掉
+  const known = Object.prototype.hasOwnProperty.call(CANVAS_PRESETS, preset);
+  const picked = known ? CANVAS_PRESETS[preset] : CANVAS_PRESETS.A4;
   return {
     width: picked.width,
     height: picked.height,
-    preset,
+    preset: known ? preset : "A4",
     dpi: picked.dpi
   };
 }

@@ -13,3 +13,9 @@ stickers/*.json
 
 # Agent 配置含 API Key，绝不入库
 config/*.json
+
+# 回归临时产物
+_regression.log
+_regression.out
+_regression.stdout
+_regression.stderr

@@ -9,7 +9,9 @@ import {
   loadImageElement,
   readImageFileAsDataUrl
 } from "../lib/dnd";
-import { collectProjectImages } from "../lib/imagePool";
+import { collectProjectImages, findPooledImage } from "../lib/imagePool";
+import BackgroundRemoverModal from "./BackgroundRemoverModal";
+import TileImageModal from "./TileImageModal";
 import { normalizePreset } from "../lib/presets";
 import { getActivePage, useEditorStore } from "../lib/store";
 import { StickerDef, listStickerGroups, normalizeCustomStickers } from "../lib/stickers";
@@ -101,6 +103,7 @@ export default function LeftToolPanel({
   const deleteBubblePreset = useEditorStore((state) => state.deleteBubblePreset);
   const openPresetEditor = useEditorStore((state) => state.openPresetEditor);
   const addStickerOverlay = useEditorStore((state) => state.addStickerOverlay);
+  const addOverlayImage = useEditorStore((state) => state.addOverlayImage);
   const addCustomStickers = useEditorStore((state) => state.addCustomStickers);
   const removeCustomSticker = useEditorStore((state) => state.removeCustomSticker);
   const setNotice = useEditorStore((state) => state.setNotice);
@@ -113,11 +116,16 @@ export default function LeftToolPanel({
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [stickerAdded, setStickerAdded] = useState(0);
+  const [bgTargetId, setBgTargetId] = useState<string | null>(null);
+  const [tileTargetId, setTileTargetId] = useState<string | null>(null);
   const bubbleInputRef = useRef<HTMLInputElement | null>(null);
   const stickerInputRef = useRef<HTMLInputElement | null>(null);
 
   const stickerGroups = listStickerGroups();
   const pooledImages = collectProjectImages(project);
+  const activeCanvas = getActivePage(project).canvas;
+  const bgTargetImage = bgTargetId ? findPooledImage(project, bgTargetId) : undefined;
+  const tileTargetImage = tileTargetId ? findPooledImage(project, tileTargetId) : undefined;
   const customGroupName = "自定义";
   const activeStickerGroup = stickerGroup || stickerGroups[0]?.name || "";
 
@@ -598,6 +606,7 @@ export default function LeftToolPanel({
             <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
               拖到<span className="text-[var(--text-primary)]">分镜</span>上会问你是否放进该格子；
               拖到<span className="text-[var(--text-primary)]">空白处</span>则在上层新建一张图片，可以自由调大小。
+              鼠标移到缩略图上还能抠图或平铺。
             </p>
 
             {pooledImages.length === 0 ? (
@@ -609,9 +618,8 @@ export default function LeftToolPanel({
             ) : (
               <div className="grid grid-cols-3 gap-1.5">
                 {pooledImages.map((item) => (
-                  <button
+                  <div
                     key={item.id}
-                    type="button"
                     draggable
                     onDragStart={(event) => {
                       event.dataTransfer.setData(POOLED_IMAGE_DND_MIME, item.id);
@@ -619,10 +627,32 @@ export default function LeftToolPanel({
                     }}
                     data-pooled-image={item.id}
                     title={item.label + "（" + item.detail + "）"}
-                    className="flex aspect-square cursor-grab items-center justify-center overflow-hidden rounded-lg border border-[var(--line-soft)] bg-[var(--panel-1)] transition hover:border-cyan-300/70 active:cursor-grabbing"
+                    className="group relative flex aspect-square cursor-grab items-center justify-center overflow-hidden rounded-lg border border-[var(--line-soft)] bg-[var(--panel-1)] transition hover:border-cyan-300/70 active:cursor-grabbing"
                   >
                     <img src={item.src} alt={item.label} className="h-full w-full object-cover" draggable={false} />
-                  </button>
+                    <div className="absolute inset-x-0 bottom-0 flex justify-center gap-1 bg-black/70 p-1 opacity-0 transition group-hover:opacity-100">
+                      <button
+                        type="button"
+                        data-pooled-image-bg={item.id}
+                        className="studio-btn h-6 px-1.5 text-[10px] leading-none"
+                        title="一键去掉与背景色接近的像素，抠成透明图后放到画布上"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={() => setBgTargetId(item.id)}
+                      >
+                        抠图
+                      </button>
+                      <button
+                        type="button"
+                        data-pooled-image-tile={item.id}
+                        className="studio-btn h-6 px-1.5 text-[10px] leading-none"
+                        title="把这张图重复平铺，铺满整张画布"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={() => setTileTargetId(item.id)}
+                      >
+                        平铺
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
@@ -767,6 +797,40 @@ export default function LeftToolPanel({
           const files = Array.from(event.target.files ?? []);
           event.target.value = "";
           void handleImportStickers(files);
+        }}
+      />
+
+      <BackgroundRemoverModal
+        source={bgTargetImage?.src ?? ""}
+        open={Boolean(bgTargetImage)}
+        resetKey={bgTargetId ?? ""}
+        applyLabel="抠图并放到画布"
+        onClose={() => setBgTargetId(null)}
+        onApply={(result) => {
+          addOverlayImage({
+            image: result.dataUrl,
+            naturalWidth: result.width,
+            naturalHeight: result.height
+          });
+          setNotice("已抠成透明图并放到画布上；它也会出现在「已导入图片」里，可以再用");
+        }}
+      />
+
+      <TileImageModal
+        source={tileTargetImage?.src ?? ""}
+        open={Boolean(tileTargetImage)}
+        canvasWidth={activeCanvas.width}
+        canvasHeight={activeCanvas.height}
+        onClose={() => setTileTargetId(null)}
+        onApply={(result) => {
+          addOverlayImage({
+            image: result.dataUrl,
+            naturalWidth: result.width,
+            naturalHeight: result.height,
+            size: { width: activeCanvas.width, height: activeCanvas.height },
+            anchor: { x: activeCanvas.width / 2, y: activeCanvas.height / 2 }
+          });
+          setNotice("已生成平铺图片，铺满整张画布");
         }}
       />
     </aside>

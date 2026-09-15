@@ -157,6 +157,8 @@ type EditorStore = {
     naturalHeight: number;
     // 拖拽投放时的中心点；不传则居中
     anchor?: { x: number; y: number };
+    // 显式指定落地尺寸（例如平铺铺满画布）；不传则按画布宽度四成
+    size?: { width: number; height: number };
   }) => void;
   updateOverlay: (id: string, patch: Partial<OverlayImage>) => void;
   deleteOverlay: (id: string) => void;
@@ -2619,16 +2621,23 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  addOverlayImage: ({ image, naturalWidth, naturalHeight, anchor }) => {
+  addOverlayImage: ({ image, naturalWidth, naturalHeight, anchor, size }) => {
     set((state) => {
       const activePage = getActivePage(state.project);
       const canvas = activePage.canvas;
 
-      // 默认按画布宽度四成摆放并保持原始比例，居中落位
-      const targetWidth = Math.max(80, canvas.width * 0.4);
-      const scale = targetWidth / Math.max(1, naturalWidth);
-      const width = Math.round(naturalWidth * scale);
-      const height = Math.round(naturalHeight * scale);
+      let width: number;
+      let height: number;
+      if (size) {
+        width = Math.max(1, Math.round(size.width));
+        height = Math.max(1, Math.round(size.height));
+      } else {
+        // 默认按画布宽度四成摆放并保持原始比例，居中落位
+        const targetWidth = Math.max(80, canvas.width * 0.4);
+        const scale = targetWidth / Math.max(1, naturalWidth);
+        width = Math.round(naturalWidth * scale);
+        height = Math.round(naturalHeight * scale);
+      }
 
       const overlay: OverlayImage = {
         id: uuidv4(),

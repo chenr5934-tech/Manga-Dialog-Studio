@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { CANVAS_PRESET_LABELS, CanvasPreset } from "../types";
 import { getActivePage, useEditorStore } from "../lib/store";
 import { loadImageElement, readImageFileAsDataUrl } from "../lib/dnd";
 
@@ -240,16 +241,19 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                 <p className={groupTitleClass}>画布</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <select
-                    className={`${selectClass} min-w-[96px]`}
+                    data-canvas-preset="1"
                     value={activePage.canvas.preset ?? "custom"}
-                    onChange={(event) => setCanvasPreset(event.target.value as "A4" | "A3" | "custom")}
-                  >
-                    <option value="A4">A4</option>
-                    <option value="A3">A3</option>
-                    <option value="custom">自定义</option>
-                  </select>
+                    onChange={(event) => setCanvasPreset(event.target.value as CanvasPreset)}
+                    >
+                      {CANVAS_PRESET_LABELS.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
                   <form className="flex items-center gap-2" onSubmit={applyCanvasSize}>
                     <input
+                      data-canvas-width="1"
                       className={`${inputClass} w-24 px-2`}
                       type="number"
                       value={canvasWidth}
@@ -257,6 +261,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                     />
                     <span className="text-[var(--text-secondary)]">x</span>
                     <input
+                      data-canvas-height="1"
                       className={`${inputClass} w-24 px-2`}
                       type="number"
                       value={canvasHeight}

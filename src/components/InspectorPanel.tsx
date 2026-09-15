@@ -877,6 +877,7 @@ function PanelInspector({ panel }: { panel: Panel }) {
   const uploadingPanelId = useEditorStore((state) => state.busy.uploadingPanelId);
 
   const [cropModalOpen, setCropModalOpen] = useState(false);
+  const setNotice = useEditorStore((state) => state.setNotice);
   const [bgRemoverOpen, setBgRemoverOpen] = useState(false);
   const localImageInputRef = useRef<HTMLInputElement | null>(null);
   const panelRotation = normalizePanelRotation(panel.rotation);
@@ -1160,7 +1161,25 @@ function PanelInspector({ panel }: { panel: Panel }) {
 
       <VisualCropModal panel={panel} open={cropModalOpen} onClose={() => setCropModalOpen(false)} />
 
-      <BackgroundRemoverModal panel={panel} open={bgRemoverOpen} onClose={() => setBgRemoverOpen(false)} />
+      <BackgroundRemoverModal
+        source={panel.image?.original ?? ""}
+        open={bgRemoverOpen}
+        resetKey={panel.id}
+        applyLabel="应用到分镜"
+        onClose={() => setBgRemoverOpen(false)}
+        onApply={(result) => {
+          updatePanel(panel.id, {
+            image: {
+              ...panel.image,
+              original: result.dataUrl,
+              naturalWidth: panel.image?.naturalWidth,
+              naturalHeight: panel.image?.naturalHeight,
+              preserveTransparency: true
+            }
+          });
+          setNotice("已应用去背景结果");
+        }}
+      />
     </div>
   );
 }

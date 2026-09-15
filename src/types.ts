@@ -1,4 +1,26 @@
-export type CanvasPreset = "A4" | "A3" | "custom";
+export type CanvasPreset =
+  | "A4"
+  | "A4-landscape"
+  | "A3"
+  | "B5"
+  | "webtoon"
+  | "square"
+  | "phone"
+  | "hd"
+  | "custom";
+
+// 常见画布尺寸的展示名，供界面下拉使用
+export const CANVAS_PRESET_LABELS: { value: CanvasPreset; label: string }[] = [
+  { value: "A4", label: "A4 竖版 2480×3508" },
+  { value: "A4-landscape", label: "A4 横版 3508×2480" },
+  { value: "A3", label: "A3 竖版 3508×4961" },
+  { value: "B5", label: "B5 竖版 2079×2953" },
+  { value: "webtoon", label: "条漫竖版 1200×2400" },
+  { value: "square", label: "方形 2048×2048" },
+  { value: "phone", label: "手机竖屏 1080×1920" },
+  { value: "hd", label: "横版 16:9 1920×1080" },
+  { value: "custom", label: "自定义尺寸" }
+];
 
 export type CanvasConfig = {
   width: number;

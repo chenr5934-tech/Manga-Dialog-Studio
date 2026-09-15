@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
-import { Panel } from "../types";
 import {
   detectBackgroundColor,
   RemoveBackgroundOptions,
   removeSolidBackground,
   RgbColor
 } from "../lib/imageTools";
+import { loadImageElement } from "../lib/dnd";
 import { useEditorStore } from "../lib/store";
+
+export type BackgroundRemovalResult = {
+  dataUrl: string;
+  width: number;
+  height: number;
+};
 
 function toHex(color: RgbColor) {
   const part = (value: number) => Math.min(255, Math.max(0, Math.round(value))).toString(16).padStart(2, "0");
@@ -23,18 +29,22 @@ function fromHex(hex: string): RgbColor {
 }
 
 export default function BackgroundRemoverModal({
-  panel,
+  source,
   open,
-  onClose
+  onClose,
+  onApply,
+  applyLabel = "应用",
+  resetKey
 }: {
-  panel: Panel;
+  source: string;
   open: boolean;
   onClose: () => void;
+  onApply: (result: BackgroundRemovalResult) => void;
+  applyLabel?: string;
+  resetKey?: string;
 }) {
-  const updatePanel = useEditorStore((state) => state.updatePanel);
   const setNotice = useEditorStore((state) => state.setNotice);
 
-  const source = panel.image?.original ?? "";
   const [color, setColor] = useState<RgbColor>({ r: 255, g: 255, b: 255 });
   const [tolerance, setTolerance] = useState(42);
   const [feather, setFeather] = useState(14);
@@ -59,7 +69,7 @@ export default function BackgroundRemoverModal({
     return () => {
       cancelled = true;
     };
-  }, [open, source, panel.id]);
+  }, [open, source, resetKey]);
 
   const recompute = useCallback(async () => {
     if (!source) {
@@ -106,21 +116,21 @@ export default function BackgroundRemoverModal({
     return null;
   }
 
-  const apply = () => {
+  const apply = async () => {
     if (!preview) {
       return;
     }
-    updatePanel(panel.id, {
-      image: {
-        ...panel.image,
-        original: preview,
-        naturalWidth: panel.image?.naturalWidth,
-        naturalHeight: panel.image?.naturalHeight,
-        preserveTransparency: true
-      }
-    });
-    setNotice("已应用去背景结果");
-    onClose();
+    try {
+      const image = await loadImageElement(preview);
+      onApply({
+        dataUrl: preview,
+        width: image.naturalWidth || 1,
+        height: image.naturalHeight || 1
+      });
+      onClose();
+    } catch {
+      setNotice("读取处理结果失败，请重试");
+    }
   };
 
   return (
@@ -221,7 +231,7 @@ export default function BackgroundRemoverModal({
             </label>
 
             <p className="rounded-lg bg-[var(--panel-1)] px-2.5 py-2 text-[11px] leading-5 text-[var(--text-secondary)]">
-              只去掉与背景色接近的像素，线条和主体会保留。处理结果可撤销，不满意按 Ctrl+Z 退回。
+              只去掉与背景色接近的像素，线条和主体会保留。原图不会被改坏，结果可撤销，不满意按 Ctrl+Z 退回。
             </p>
           </div>
         </div>
@@ -239,9 +249,9 @@ export default function BackgroundRemoverModal({
               data-bg-apply="1"
               className="studio-btn studio-btn-primary h-8 px-4 text-xs disabled:cursor-not-allowed disabled:opacity-40"
               disabled={!preview || busy}
-              onClick={apply}
+              onClick={() => void apply()}
             >
-              应用到分镜
+              {applyLabel}
             </button>
           </div>
         </div>
