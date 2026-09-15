@@ -99,6 +99,25 @@ await sleep(2500);
 await page.click("[data-import-confirm]");
 await sleep(2500);
 
+// 导入只进素材库，要变成胶片页得把它拖到胶片栏上
+async function materialToPage(index = 0) {
+  await page.click('[data-tool="images"]');
+  await sleep(700);
+  await page.evaluate((i) => {
+    const tile = Array.from(document.querySelectorAll("[data-pooled-image]"))[i];
+    const list = document.querySelector("[data-thumb-list]");
+    if (!tile || !list) return;
+    const dataTransfer = new DataTransfer();
+    tile.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer }));
+    const options = { bubbles: true, cancelable: true, dataTransfer };
+    list.dispatchEvent(new DragEvent("dragover", options));
+    list.dispatchEvent(new DragEvent("drop", options));
+  }, index);
+  await sleep(2000);
+}
+
+await materialToPage();
+
 // ---------- 1) 图片池入口 ----------
 await page.click('[data-tool="images"]');
 await sleep(600);

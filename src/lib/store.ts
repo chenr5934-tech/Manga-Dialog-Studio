@@ -238,6 +238,8 @@ type EditorStore = {
   openImportDialog: () => void;
   closeImportDialog: () => void;
   importImagesAsPages: (items: PageImportItem[], mode: PageImportMode) => void;
+  // 从「已导入图片」把素材变成胶片页。afterPageId 传了就插在那页后面，不传追加到末尾
+  addPagesFromImages: (items: PageImportItem[], afterPageId?: string) => void;
   setBackdropColor: (color: string) => void;
 
   addBubbleFromPreset: (presetId: string, anchor: { x: number; y: number }) => void;
@@ -3562,6 +3564,49 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         selection: undefined,
         importDialogOpen: false
       };
+    });
+  },
+
+  addPagesFromImages: (items, afterPageId) => {
+    if (items.length === 0) {
+      return;
+    }
+
+    const pages = items.map((item, index) =>
+      createProjectPage({
+        name: item.name.trim() || `新页面 ${index + 1}`,
+        canvas: {
+          width: Math.max(240, Math.round(item.width)),
+          height: Math.max(240, Math.round(item.height)),
+          preset: "custom",
+          dpi: 300
+        },
+        background: {
+          original: item.dataUrl,
+          naturalWidth: Math.round(item.width),
+          naturalHeight: Math.round(item.height),
+          mimeType: item.mimeType
+        },
+        withDefaultPanel: false
+      })
+    );
+
+    set((state) => {
+      const current = state.project.pages;
+      const at = afterPageId ? current.findIndex((page) => page.id === afterPageId) : -1;
+      const insertAt = at >= 0 ? at + 1 : current.length;
+      const nextPages = [...current.slice(0, insertAt), ...pages, ...current.slice(insertAt)];
+
+      const historyState = withHistory(
+        state,
+        { ...state.project, pages: nextPages, activePageId: pages[0].id },
+        pages.length === 1 ? `已从素材新建页面：${pages[0].name}` : `已从素材新建 ${pages.length} 页`
+      );
+      if (!historyState) {
+        return state;
+      }
+
+      return { ...historyState, selection: undefined };
     });
   },
 

@@ -262,6 +262,29 @@ await shot("v3-01-import-dialog");
 
 await page.click("[data-import-confirm]");
 await sleep(3000);
+
+async function materialsToPages(count) {
+  await page.click('[data-tool="images"]');
+  await sleep(700);
+  for (let index = 0; index < count; index += 1) {
+    await page.evaluate((i) => {
+      const tile = Array.from(document.querySelectorAll("[data-pooled-image]"))[i];
+      const list = document.querySelector("[data-thumb-list]");
+      if (!tile || !list) return;
+      const dataTransfer = new DataTransfer();
+      tile.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer }));
+      const options = { bubbles: true, cancelable: true, dataTransfer };
+      list.dispatchEvent(new DragEvent("dragover", options));
+      list.dispatchEvent(new DragEvent("drop", options));
+    }, index);
+    await sleep(1800);
+  }
+  // 用完把左栏切回预设，后面的用例还要点预设卡片
+  await page.click('[data-tool="presets"]');
+  await sleep(600);
+}
+
+await materialsToPages(3);
 const pageTotal = await page.evaluate(() => document.querySelectorAll("[data-thumb-index]").length);
 record("导入后按顺序生成页面", pageTotal === 4, "页面数=" + pageTotal);
 await shot("v3-02-pages-imported");

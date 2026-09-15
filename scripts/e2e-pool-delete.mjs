@@ -81,6 +81,25 @@ await (await page.$("[data-import-images-input]")).uploadFile(A_PNG, B_PNG);
 await sleep(2600);
 await page.click("[data-import-confirm]");
 await sleep(2800);
+
+// 导入只进素材库，要变成胶片页得把它拖到胶片栏上
+async function materialToPage(index = 0) {
+  await page.click('[data-tool="images"]');
+  await sleep(700);
+  await page.evaluate((i) => {
+    const tile = Array.from(document.querySelectorAll("[data-pooled-image]"))[i];
+    const list = document.querySelector("[data-thumb-list]");
+    if (!tile || !list) return;
+    const dataTransfer = new DataTransfer();
+    tile.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer }));
+    const options = { bubbles: true, cancelable: true, dataTransfer };
+    list.dispatchEvent(new DragEvent("dragover", options));
+    list.dispatchEvent(new DragEvent("drop", options));
+  }, index);
+  await sleep(2000);
+}
+
+await materialToPage();
 await page.click('[data-tool="images"]');
 await sleep(800);
 
@@ -180,13 +199,14 @@ record(
 await page.evaluate(() => document.querySelector("[data-pool-select-toggle]")?.click());
 await sleep(400);
 
-// 导入一张新图，让它同时成为底图（项目引用）
+// 导入一张新图，拖成胶片页，让它同时成为底图（项目引用）
 await clickByText("导入图片");
 await sleep(700);
 await (await page.$("[data-import-images-input]")).uploadFile(A_PNG);
 await sleep(2400);
 await page.click("[data-import-confirm]");
 await sleep(2600);
+await materialToPage();
 await page.click('[data-tool="images"]');
 await sleep(900);
 

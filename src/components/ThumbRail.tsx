@@ -8,6 +8,9 @@ import { getPanelRenderTransform } from "../lib/panelGeometry";
 import { drawPanelPath, getPanelImageLayout } from "../lib/panelRender";
 import { DEFAULT_BACKDROP_COLOR } from "../lib/project";
 import { useEditorStore } from "../lib/store";
+import { POOLED_IMAGE_DND_MIME, loadImageElement } from "../lib/dnd";
+import { findPooledImage } from "../lib/imagePool";
+import { collectProjectImages } from "../lib/imagePool";
 import { BubbleShapeLayer, BubbleTextLayer, resolveBubbleOpacity } from "./BubbleVisual";
 
 const iconButtonClass =
@@ -193,6 +196,36 @@ export default function ThumbRail() {
   const movePage = useEditorStore((state) => state.movePage);
   const reorderPages = useEditorStore((state) => state.reorderPages);
   const duplicatePage = useEditorStore((state) => state.duplicatePage);
+  const addPagesFromImages = useEditorStore((state) => state.addPagesFromImages);
+  const uploadedImages = useEditorStore((state) => state.uploadedImages);
+  const hiddenPoolImages = useEditorStore((state) => state.hiddenPoolImages);
+  const setNotice = useEditorStore((state) => state.setNotice);
+
+  // 从左侧「已导入图片」拖过来的素材，落到胶片栏就生成对应的页
+  const dropMaterial = async (pooledId: string, afterPageId?: string) => {
+    const pooled = findPooledImage(project, pooledId, uploadedImages, hiddenPoolImages);
+    if (!pooled) {
+      setNotice("这张素材已经不在列表里了");
+      return;
+    }
+    try {
+      const image = await loadImageElement(pooled.src);
+      addPagesFromImages(
+        [
+          {
+            name: pooled.label,
+            dataUrl: pooled.src,
+            width: image.naturalWidth || pooled.naturalWidth || 1200,
+            height: image.naturalHeight || pooled.naturalHeight || 1600,
+            mimeType: "image/png"
+          }
+        ],
+        afterPageId
+      );
+    } catch {
+      setNotice("读取素材失败，无法生成页面");
+    }
+  };
 
   const listRef = useRef<HTMLDivElement | null>(null);
   // 拖拽用 ref 记 id：dragstart 之后 dragover/drop 是同步来的，
@@ -253,7 +286,27 @@ export default function ThumbRail() {
         </span>
       </div>
 
-      <div ref={listRef} className="thumb-rail-scroll min-h-0 flex-1 space-y-2 overflow-y-auto px-2 py-2">
+      <div
+        ref={listRef}
+        data-thumb-list="1"
+        onDragOver={(event) => {
+          if (event.dataTransfer.types.includes(POOLED_IMAGE_DND_MIME)) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+          }
+        }}
+        onDrop={(event) => {
+          const material = event.dataTransfer.getData(POOLED_IMAGE_DND_MIME);
+          if (!material) {
+            return;
+          }
+          event.preventDefault();
+          // 落在列表空白处 = 追加到末尾
+          void dropMaterial(material);
+          setDropMark(null);
+        }}
+        className="thumb-rail-scroll min-h-0 flex-1 space-y-2 overflow-y-auto px-2 py-2"
+      >
         {project.pages.map((page, index) => {
           const isActive = page.id === project.activePageId;
           return (
@@ -269,6 +322,15 @@ export default function ThumbRail() {
                 event.dataTransfer.setData("text/plain", page.id);
               }}
               onDragOver={(event) => {
+                // 从左侧素材栏拖过来的图片：落在哪一页上就插到那一页后面
+                if (event.dataTransfer.types.includes(POOLED_IMAGE_DND_MIME)) {
+                  event.preventDefault();
+                  // 必须拦住冒泡：不然外层的列表容器也会接一次，一次拖拽生成两页
+                  event.stopPropagation();
+                  event.dataTransfer.dropEffect = "copy";
+                  setDropMark({ id: page.id, position: "after" });
+                  return;
+                }
                 const dragging = dragIdRef.current;
                 if (!dragging || dragging === page.id) {
                   return;
@@ -287,6 +349,14 @@ export default function ThumbRail() {
               }}
               onDrop={(event) => {
                 event.preventDefault();
+                const material = event.dataTransfer.getData(POOLED_IMAGE_DND_MIME);
+                if (material) {
+                  // 同理，不能让外层列表再处理一遍
+                  event.stopPropagation();
+                  void dropMaterial(material, page.id);
+                  setDropMark(null);
+                  return;
+                }
                 const dragging = dragIdRef.current;
                 if (dragging && dragging !== page.id) {
                   reorderPages(

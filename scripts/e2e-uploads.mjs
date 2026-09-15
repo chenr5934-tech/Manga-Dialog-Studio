@@ -71,6 +71,26 @@ await sleep(2500);
 await page.click("[data-import-confirm]");
 await sleep(3000);
 
+// 导入只进素材库，要变成胶片页得拖到胶片栏上
+async function materialToPage() {
+  await page.click('[data-tool="images"]');
+  await sleep(700);
+  await page.evaluate(() => {
+    const tile = document.querySelector("[data-pooled-image]");
+    const list = document.querySelector("[data-thumb-list]");
+    if (!tile || !list) return;
+    const dataTransfer = new DataTransfer();
+    tile.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer }));
+    const options = { bubbles: true, cancelable: true, dataTransfer };
+    list.dispatchEvent(new DragEvent("dragover", options));
+    list.dispatchEvent(new DragEvent("drop", options));
+  });
+  await sleep(2000);
+}
+
+// 先把它拖成一张胶片页，后面要验证「删掉页面后原稿还在」
+await materialToPage();
+
 record("原稿导入后写入了 uploads/", existsSync(LIBRARY), existsSync(LIBRARY) ? LIBRARY.split("/").pop() : "文件不存在");
 
 const libraryPayload = await page.evaluate(async () => {

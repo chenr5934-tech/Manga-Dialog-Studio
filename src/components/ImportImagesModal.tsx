@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { PageImportItem, PageImportMode } from "../types";
+import { PageImportItem } from "../types";
 import { IMAGE_FILE_ACCEPT, loadImageElement, readImageFileAsDataUrl } from "../lib/dnd";
 import { makeUploadedImage } from "../lib/uploads";
 import { useEditorStore } from "../lib/store";
@@ -10,13 +10,10 @@ const cardButtonClass = "studio-btn flex h-10 w-10 shrink-0 items-center justify
 export default function ImportImagesModal() {
   const open = useEditorStore((state) => state.importDialogOpen);
   const closeImportDialog = useEditorStore((state) => state.closeImportDialog);
-  const importImagesAsPages = useEditorStore((state) => state.importImagesAsPages);
-  const addUploadedImages = useEditorStore((state) => state.addUploadedImages);
   const setNotice = useEditorStore((state) => state.setNotice);
-  const pageCount = useEditorStore((state) => state.project.pages.length);
+  const addUploadedImages = useEditorStore((state) => state.addUploadedImages);
 
   const [items, setItems] = useState<PageImportItem[]>([]);
-  const [mode, setMode] = useState<PageImportMode>("append");
   const [busy, setBusy] = useState(false);
   const [dropActive, setDropActive] = useState(false);
 
@@ -27,7 +24,7 @@ export default function ImportImagesModal() {
   useEffect(() => {
     if (!open) {
       setItems([]);
-      setMode("append");
+
       setOverIndex(null);
       dragIndexRef.current = null;
     }
@@ -130,15 +127,8 @@ export default function ImportImagesModal() {
       return;
     }
 
-    if (mode === "replace" && pageCount > 0) {
-      const confirmed = window.confirm(`当前项目已有 ${pageCount} 页，替换后这些页面与其上的分镜、气泡都会移除。继续？`);
-      if (!confirmed) {
-        return;
-      }
-    }
-
-    // 顺手在 uploads/ 留一份常驻副本：之后把页面或图片层删掉，
-    // 左侧「已导入图片」里依然找得到这张原稿
+    // 导入只把原稿存进 uploads/ 素材库，**不再自动生成胶片页**。
+    // 想让它变成一页，去左侧「已导入图片」把它拖到胶片栏上。
     const stored = items.map((item) =>
       makeUploadedImage(item.name, item.dataUrl, item.width, item.height)
     );
@@ -146,7 +136,8 @@ export default function ImportImagesModal() {
     // 否则会拿过期的 hidden 覆盖掉
     addUploadedImages(stored);
 
-    importImagesAsPages(items, mode);
+    setNotice("已把 " + stored.length + " 张加入素材库，拖到右侧胶片栏即可生成页面");
+    closeImportDialog();
   };
 
   return (
@@ -304,24 +295,10 @@ export default function ImportImagesModal() {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line-soft)] px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-[var(--text-secondary)]">导入方式</span>
-            <div className="flex overflow-hidden rounded-lg border border-[var(--line-soft)]">
-              <button
-                type="button"
-                className={`studio-btn h-7 rounded-none border-0 px-3 text-xs ${mode === "append" ? "studio-btn-primary" : ""}`}
-                onClick={() => setMode("append")}
-              >
-                追加到末尾
-              </button>
-              <button
-                type="button"
-                className={`studio-btn h-7 rounded-none border-0 px-3 text-xs ${mode === "replace" ? "studio-btn-primary" : ""}`}
-                onClick={() => setMode("replace")}
-              >
-                替换全部页面
-              </button>
-            </div>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="text-[11px] leading-4 text-[var(--text-secondary)]">
+              导入只进「已导入图片」素材库，不生成胶片页。想让它变成一页，把它拖到右侧胶片栏上。
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -335,7 +312,7 @@ export default function ImportImagesModal() {
               onClick={confirmImport}
               disabled={items.length === 0 || busy}
             >
-              导入
+              加入素材库
             </button>
           </div>
         </div>
