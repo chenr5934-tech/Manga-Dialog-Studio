@@ -15,6 +15,16 @@ if (hadUploads) {
   copyFileSync(UPLOADS, UPLOADS_BACKUP);
 }
 const restoreUploads = () => {
+  // 跑完先删干净：测试期间各套件写进去的都是测试图。
+  // 结束瞬间文件可能还被浏览器句柄占着，删不掉就重试几次。
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    rmSync(UPLOADS, { force: true });
+    if (!existsSync(UPLOADS)) {
+      break;
+    }
+    // 同步小睡一下再试，避免和刚退出的浏览器进程抢文件句柄
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300);
+  }
   rmSync(UPLOADS, { force: true });
   if (hadUploads && existsSync(UPLOADS_BACKUP)) {
     renameSync(UPLOADS_BACKUP, UPLOADS);
@@ -55,6 +65,12 @@ for (const name of files) {
   console.log(name + " -> " + p + "/" + a);
 }
 restoreUploads();
+// e2e-uploads 自己的守卫会把「它开跑前那一刻」的内容还原回去，
+// 那份内容也是测试写的，所以最后再清一次
+rmSync(UPLOADS, { force: true });
+if (!hadUploads) {
+  rmSync(UPLOADS_BACKUP, { force: true });
+}
 
 appendFileSync(ROOT + "/_regression.log", "TOTAL " + passed + " passed, " + failed + " failed\n");
 console.log("TOTAL " + passed + " passed, " + failed + " failed");

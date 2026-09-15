@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   detectBackgroundColor,
   RemoveBackgroundOptions,
@@ -133,65 +134,67 @@ export default function BackgroundRemoverModal({
     }
   };
 
-  return (
+  // 必须挂到 body：挂在左栏 aside 里面的话，fixed 会被那个 226px 宽的容器困住，
+  // 弹窗会被压成一字一行的细条
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4" onPointerDown={onClose}>
       <div
         data-bg-remover="1"
-        className="studio-surface flex max-h-full w-full max-w-4xl flex-col overflow-hidden"
+        className="studio-surface flex max-h-full w-full max-w-5xl flex-col overflow-hidden"
         onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">背景处理</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-secondary)]">背景处理</p>
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">去除同色背景</h3>
           </div>
-          <button type="button" className="studio-btn h-7 px-3 text-xs" onClick={onClose}>
+          <button type="button" className="studio-btn h-9 px-4 text-sm" onClick={onClose}>
             关闭
           </button>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-auto p-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-8 overflow-auto p-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="flex flex-col items-center gap-3">
             <div className="grid w-full grid-cols-2 gap-3">
               <div className="space-y-1">
-                <p className="text-center text-[11px] text-[var(--text-secondary)]">原图</p>
-                <div className="checker-bg flex h-56 items-center justify-center overflow-hidden rounded-lg border border-[var(--line-soft)] p-1">
+                <p className="text-center text-sm text-[var(--text-secondary)]">原图</p>
+                <div className="checker-bg flex h-64 items-center justify-center overflow-hidden rounded-lg border border-[var(--line-soft)] p-1">
                   <img src={source} alt="原图" className="max-h-full max-w-full object-contain" />
                 </div>
               </div>
               <div className="space-y-1">
-                <p className="text-center text-[11px] text-[var(--text-secondary)]">
+                <p className="text-center text-sm text-[var(--text-secondary)]">
                   去背景后{preview ? "（已去除 " + Math.round(removedRatio * 100) + "%）" : ""}
                 </p>
-                <div className="checker-bg flex h-56 items-center justify-center overflow-hidden rounded-lg border border-[var(--line-soft)] p-1">
+                <div className="checker-bg flex h-64 items-center justify-center overflow-hidden rounded-lg border border-[var(--line-soft)] p-1">
                   {preview ? (
                     <img src={preview} alt="去背景结果" className="max-h-full max-w-full object-contain" />
                   ) : (
-                    <span className="text-[11px] text-[var(--text-secondary)]">{busy ? "处理中..." : "等待参数"}</span>
+                    <span className="text-sm text-[var(--text-secondary)]">{busy ? "处理中..." : "等待参数"}</span>
                   )}
                 </div>
               </div>
             </div>
-            <p className="text-[11px] leading-5 text-[var(--text-secondary)]">
+            <p className="text-sm leading-5 text-[var(--text-secondary)]">
               棋盘格表示透明区域。调整容差能把背景去干净，留着没去净的杂点就调大容差；
               羽化用来软化边缘，避免留下硬锯齿。
             </p>
           </div>
 
-          <div className="space-y-5">
+          <div className="space-y-7">
             <section data-bg-section="color" className="space-y-2">
-              <p className="text-[11px] font-medium text-[var(--text-primary)]">背景色</p>
+              <p className="text-sm font-medium text-[var(--text-primary)]">背景色</p>
               <div className="flex items-center gap-2">
                 <input
                   type="color"
-                  className="studio-input h-9 w-16 px-1"
+                  className="studio-input h-11 w-20 px-1"
                   data-bg-color="1"
                   value={toHex(color)}
                   onChange={(event) => setColor(fromHex(event.target.value))}
                 />
                 <button
                   type="button"
-                  className="studio-btn h-9 px-3 text-[11px]"
+                  className="studio-btn h-11 px-4 text-sm"
                   data-bg-detect="1"
                   onClick={() => {
                     void detectBackgroundColor(source).then(setColor);
@@ -200,15 +203,15 @@ export default function BackgroundRemoverModal({
                   自动取色
                 </button>
               </div>
-              <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
+              <p className="text-xs leading-4 text-[var(--text-secondary)]">
                 打开时会自动贴着图片四边采样猜一次；偏了就点左边色块自己改。
               </p>
             </section>
 
-            <section data-bg-section="tolerance" className="space-y-2 border-t border-[var(--line-soft)] pt-4">
+            <section data-bg-section="tolerance" className="space-y-3 border-t border-[var(--line-soft)] pt-6">
               <div className="flex items-baseline justify-between">
-                <p className="text-[11px] font-medium text-[var(--text-primary)]">颜色容差</p>
-                <span className="text-[11px] text-[var(--text-secondary)]">{tolerance}</span>
+                <p className="text-sm font-medium text-[var(--text-primary)]">颜色容差</p>
+                <span className="text-sm text-[var(--text-secondary)]">{tolerance}</span>
               </div>
               <input
                 type="range"
@@ -218,17 +221,17 @@ export default function BackgroundRemoverModal({
                 data-bg-tolerance="1"
                 value={tolerance}
                 onChange={(event) => setTolerance(Number(event.target.value))}
-                className="w-full accent-[var(--accent)]"
+                className="h-6 w-full cursor-pointer accent-[var(--accent)]"
               />
-              <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
+              <p className="text-xs leading-4 text-[var(--text-secondary)]">
                 决定多接近背景色才算背景。底色有渐变或压缩噪点就往大调；调过头会把浅色线条一起吃进去。
               </p>
             </section>
 
-            <section data-bg-section="feather" className="space-y-2 border-t border-[var(--line-soft)] pt-4">
+            <section data-bg-section="feather" className="space-y-3 border-t border-[var(--line-soft)] pt-6">
               <div className="flex items-baseline justify-between">
-                <p className="text-[11px] font-medium text-[var(--text-primary)]">边缘羽化</p>
-                <span className="text-[11px] text-[var(--text-secondary)]">{feather}</span>
+                <p className="text-sm font-medium text-[var(--text-primary)]">边缘羽化</p>
+                <span className="text-sm text-[var(--text-secondary)]">{feather}</span>
               </div>
               <input
                 type="range"
@@ -238,31 +241,31 @@ export default function BackgroundRemoverModal({
                 data-bg-feather="1"
                 value={feather}
                 onChange={(event) => setFeather(Number(event.target.value))}
-                className="w-full accent-[var(--accent)]"
+                className="h-6 w-full cursor-pointer accent-[var(--accent)]"
               />
-              <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
+              <p className="text-xs leading-4 text-[var(--text-secondary)]">
                 调大让边界过渡柔和，避免留下硬锯齿；调太大会让主体边缘发糊。
               </p>
             </section>
 
-            <p className="rounded-lg bg-[var(--panel-1)] px-3 py-2.5 text-[10px] leading-5 text-[var(--text-secondary)]">
+            <p className="rounded-lg bg-[var(--panel-1)] px-3 py-2.5 text-xs leading-5 text-[var(--text-secondary)]">
               只去掉与背景色接近的像素，线条和主体会保留。原图不会被改坏，结果可撤销，不满意按 `Ctrl+Z` 退回。
             </p>
           </div>
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-[var(--line-soft)] px-4 py-3">
-          <span className="text-[11px] text-[var(--text-secondary)]">
+          <span className="text-sm text-[var(--text-secondary)]">
             {preview ? "已按当前参数生成预览" : busy ? "正在生成预览..." : "调整参数后自动生成预览"}
           </span>
           <div className="flex gap-2">
-            <button type="button" className="studio-btn h-8 px-3 text-xs" onClick={onClose}>
+            <button type="button" className="studio-btn h-10 px-5 text-sm" onClick={onClose}>
               取消
             </button>
             <button
               type="button"
               data-bg-apply="1"
-              className="studio-btn studio-btn-primary h-8 px-4 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+              className="studio-btn studio-btn-primary h-10 px-6 text-sm disabled:cursor-not-allowed disabled:opacity-40"
               disabled={!preview || busy}
               onClick={() => void apply()}
             >
@@ -271,6 +274,7 @@ export default function BackgroundRemoverModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

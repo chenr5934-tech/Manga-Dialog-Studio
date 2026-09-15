@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { loadImageElement } from "../lib/dnd";
 import { useEditorStore } from "../lib/store";
 
@@ -171,27 +172,28 @@ export default function FillCanvasModal({
     }
   };
 
-  return (
+  // 和去背景窗口一样必须挂到 body：挂在左栏 aside 里会被那个窄容器压扁
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4" onPointerDown={onClose}>
       <div
         data-fill-modal="1"
-        className="studio-surface flex max-h-full w-full max-w-3xl flex-col overflow-hidden"
+        className="studio-surface flex max-h-full w-full max-w-4xl flex-col overflow-hidden"
         onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-5 py-3">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">图片处理</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-secondary)]">图片处理</p>
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">铺满画布</h3>
           </div>
-          <button type="button" className="studio-btn h-7 px-3 text-xs" onClick={onClose}>
+          <button type="button" className="studio-btn h-9 px-4 text-sm" onClick={onClose}>
             关闭
           </button>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-auto p-5 lg:grid-cols-[minmax(0,1fr)_260px]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-8 overflow-auto p-6 lg:grid-cols-[minmax(0,1fr)_340px]">
           {/* 左列：预览 */}
           <div className="flex flex-col items-center gap-3">
-            <p className="text-[11px] text-[var(--text-secondary)]">
+            <p className="text-sm text-[var(--text-secondary)]">
               画布预览 {Math.round(canvasWidth)} × {Math.round(canvasHeight)}
             </p>
             <div
@@ -207,15 +209,15 @@ export default function FillCanvasModal({
                 style={{ objectFit: mode === "stretch" ? "fill" : mode, objectPosition: align }}
               />
             </div>
-            <p className="text-[11px] leading-5 text-[var(--text-secondary)]">
+            <p className="text-sm leading-5 text-[var(--text-secondary)]">
               棋盘格是画布上没被图片盖到的部分。生成后是一张和画布等大的图片层，可以继续拖动缩放。
             </p>
           </div>
 
           {/* 右列：参数，按组分开 */}
-          <div className="space-y-5">
+          <div className="space-y-7">
             <section data-fill-section="mode" className="space-y-2">
-              <p className="text-[11px] font-medium text-[var(--text-primary)]">铺满方式</p>
+              <p className="text-sm font-medium text-[var(--text-primary)]">铺满方式</p>
               <div className="space-y-1.5">
                 {MODES.map((item) => (
                   <button
@@ -230,15 +232,15 @@ export default function FillCanvasModal({
                         : "border-[var(--line-soft)] hover:border-cyan-300/50")
                     }
                   >
-                    <span className="text-xs text-[var(--text-primary)]">{item.label}</span>
-                    <span className="text-[10px] leading-4 text-[var(--text-secondary)]">{item.hint}</span>
+                    <span className="text-sm font-medium text-[var(--text-primary)]">{item.label}</span>
+                    <span className="text-xs leading-5 text-[var(--text-secondary)]">{item.hint}</span>
                   </button>
                 ))}
               </div>
             </section>
 
-            <section data-fill-section="align" className="space-y-2 border-t border-[var(--line-soft)] pt-4">
-              <p className="text-[11px] font-medium text-[var(--text-primary)]">对齐</p>
+            <section data-fill-section="align" className="space-y-3 border-t border-[var(--line-soft)] pt-6">
+              <p className="text-sm font-medium text-[var(--text-primary)]">对齐</p>
               <div className="flex flex-wrap gap-1.5">
                 {ALIGNS.map((item) => (
                   <button
@@ -248,7 +250,7 @@ export default function FillCanvasModal({
                     disabled={mode === "stretch"}
                     onClick={() => setAlign(item.value)}
                     className={
-                      "studio-btn h-7 px-2.5 text-[11px] disabled:cursor-not-allowed disabled:opacity-40 " +
+                      "studio-btn h-7 px-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-40 " +
                       (align === item.value && mode !== "stretch" ? "studio-btn-primary" : "")
                     }
                   >
@@ -256,7 +258,7 @@ export default function FillCanvasModal({
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
+              <p className="text-xs leading-4 text-[var(--text-secondary)]">
                 {mode === "stretch"
                   ? "拉伸铺满时图片已经占满画布，不需要对齐。"
                   : mode === "cover"
@@ -266,14 +268,14 @@ export default function FillCanvasModal({
             </section>
 
             <section data-fill-section="info" className="space-y-1 border-t border-[var(--line-soft)] pt-4">
-              <p className="text-[11px] font-medium text-[var(--text-primary)]">尺寸</p>
-              <p className="text-[10px] leading-5 text-[var(--text-secondary)]">
+              <p className="text-sm font-medium text-[var(--text-primary)]">尺寸</p>
+              <p className="text-xs leading-5 text-[var(--text-secondary)]">
                 原图 {sourceSize.width} × {sourceSize.height}（比例 {srcRatio}）
                 <br />
                 画布 {Math.round(canvasWidth)} × {Math.round(canvasHeight)}（比例 {ratio}）
               </p>
               {distorted ? (
-                <p className="pt-1 text-[10px] leading-4 text-amber-500">
+                <p className="pt-1 text-xs leading-4 text-amber-500">
                   两者比例不同，拉伸铺满会把画面压变形。想保住形状就换成「等比填满」。
                 </p>
               ) : null}
@@ -282,17 +284,17 @@ export default function FillCanvasModal({
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-[var(--line-soft)] px-5 py-3">
-          <span className="text-[11px] text-[var(--text-secondary)]">
+          <span className="text-sm text-[var(--text-secondary)]">
             {MODES.find((item) => item.value === mode)?.label}
           </span>
           <div className="flex gap-2">
-            <button type="button" className="studio-btn h-8 px-3 text-xs" onClick={onClose}>
+            <button type="button" className="studio-btn h-10 px-5 text-sm" onClick={onClose}>
               取消
             </button>
             <button
               type="button"
               data-fill-apply="1"
-              className="studio-btn studio-btn-primary h-8 px-4 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+              className="studio-btn studio-btn-primary h-10 px-6 text-sm disabled:cursor-not-allowed disabled:opacity-40"
               disabled={busy}
               onClick={() => void apply()}
             >
@@ -301,6 +303,7 @@ export default function FillCanvasModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
