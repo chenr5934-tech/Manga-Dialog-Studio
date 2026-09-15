@@ -17,7 +17,13 @@ import {
   persistCustomStickers
 } from "./stickers";
 import { hashImage, persistUploadLibrary, UploadedImage } from "./uploads";
-import { LayerMove, moveLayerInOrder, resolveLayerOrder } from "./layers";
+import {
+  LayerMove,
+  moveLayerInOrder,
+  normalizeGroups,
+  reorderLayerInOrder,
+  resolveLayerOrder
+} from "./layers";
 
 const LAYER_MOVE_LABEL: Record<LayerMove, string> = {
   up: "上移一层",
@@ -57,6 +63,7 @@ import {
   OverlayImage,
   CanvasPreset,
   CropConfig,
+  LayerGroup,
   PageImportItem,
   PageImportMode,
   Panel,
@@ -202,6 +209,17 @@ type EditorStore = {
   setHiddenPoolImages: (list: string[]) => void;
   // 层序调整：上移 / 下移 / 置顶 / 置底
   moveLayer: (id: string, move: LayerMove) => void;
+  // 给对象起名；传空字符串恢复自动描述
+  setLayerName: (id: string, name: string) => void;
+  // 拖拽改层序：把 dragId 放到 targetId 的上方或下方
+  reorderLayer: (dragId: string, targetId: string, position: "above" | "below") => void;
+  // 分组：建组 / 改名 / 折叠 / 解散 / 增删成员
+  createLayerGroup: (ids: string[], name: string) => void;
+  renameLayerGroup: (groupId: string, name: string) => void;
+  toggleLayerGroup: (groupId: string) => void;
+  removeLayerGroup: (groupId: string) => void;
+  addToLayerGroup: (ids: string[]) => void;
+  removeFromLayerGroup: (ids: string[]) => void;
   // 从 uploads/ 库里真正删掉常驻副本
   removeUploadedImages: (ids: string[]) => void;
   // 把项目里正在用的图从列表移除（只是不显示，不动画面）
@@ -250,6 +268,10 @@ type LegacyProject = {
   canvas?: ProjectPage["canvas"];
   panels?: Panel[];
   bubbles?: Bubble[];
+  overlays?: OverlayImage[];
+  layerOrder?: string[];
+  layerNames?: Record<string, string>;
+  layerGroups?: LayerGroup[];
   pages?: ProjectPage[];
   activePageId?: string;
 };
@@ -1567,8 +1589,55 @@ function sanitizePage(page: Partial<ProjectPage> | undefined, index: number): Pr
       typeof page?.backdropColor === "string" && page.backdropColor.trim()
         ? page.backdropColor.trim()
         : DEFAULT_BACKDROP_COLOR,
-    background: sanitizePanelImage(page?.background)
+    background: sanitizePanelImage(page?.background),
+    // 下面这几个是后加的字段。sanitizePage 是白名单式的，漏一个就会在
+    // 每次 applyHistory（撤销/重做）时被抹掉——层序和分组就是这么丢的。
+    layerOrder: Array.isArray(page?.layerOrder)
+      ? page.layerOrder.map((entry) => String(entry)).filter(Boolean)
+      : undefined,
+    layerNames: sanitizeLayerNames(page?.layerNames),
+    layerGroups: sanitizeLayerGroups(page?.layerGroups)
   };
+}
+
+function sanitizeLayerNames(input: unknown): Record<string, string> | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return undefined;
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    const name = typeof value === "string" ? value.trim() : "";
+    if (key && name) {
+      out[key] = name;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function sanitizeLayerGroups(input: unknown): LayerGroup[] | undefined {
+  if (!Array.isArray(input)) {
+    return undefined;
+  }
+  const out: LayerGroup[] = [];
+  for (const raw of input) {
+    if (!raw || typeof raw !== "object") {
+      continue;
+    }
+    const group = raw as Partial<LayerGroup>;
+    const memberIds = (Array.isArray(group.memberIds) ? group.memberIds : [])
+      .map((id) => String(id))
+      .filter(Boolean);
+    if (memberIds.length === 0) {
+      continue;
+    }
+    out.push({
+      id: String(group.id ?? uuidv4()),
+      name: String(group.name ?? "分组"),
+      memberIds,
+      collapsed: Boolean(group.collapsed)
+    });
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 function normalizeLoadedProject(loaded: LegacyProject): Project {
@@ -1590,7 +1659,11 @@ function normalizeLoadedProject(loaded: LegacyProject): Project {
       name: "第 1 页",
       canvas: loaded.canvas,
       panels: loaded.panels,
-      bubbles: loaded.bubbles
+      bubbles: loaded.bubbles,
+      overlays: loaded.overlays,
+      layerOrder: loaded.layerOrder,
+      layerNames: loaded.layerNames,
+      layerGroups: loaded.layerGroups
     },
     0
   );
@@ -3019,6 +3092,153 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   setHiddenPoolImages: (list) => {
     set({ hiddenPoolImages: list });
+  },
+
+  reorderLayer: (dragId, targetId, position) => {
+    set((state) => {
+      const activePage = getActivePage(state.project);
+      const order = resolveLayerOrder(activePage);
+      // 列表里越靠上越顶层，层序数组越靠后越顶层，所以语义要翻过来
+      const next = reorderLayerInOrder(order, dragId, targetId, position === "above" ? "after" : "before");
+      if (!next) {
+        return state;
+      }
+      const historyState = withHistory(
+        state,
+        updateActivePage(state.project, (page) => ({ ...page, layerOrder: next })),
+        "调整叠放顺序"
+      );
+      return historyState ?? state;
+    });
+  },
+
+  setLayerName: (id, name) => {
+    set((state) => {
+      const activePage = getActivePage(state.project);
+      const names = { ...(activePage.layerNames ?? {}) };
+      const trimmed = name.trim();
+      if (trimmed) {
+        names[id] = trimmed;
+      } else {
+        delete names[id];
+      }
+      const historyState = withHistory(
+        state,
+        updateActivePage(state.project, (page) => ({ ...page, layerNames: names })),
+        trimmed ? "重命名为「" + trimmed + "」" : "恢复默认名称"
+      );
+      return historyState ?? state;
+    });
+  },
+
+  createLayerGroup: (ids, name) => {
+    if (ids.length === 0) {
+      return;
+    }
+    set((state) => {
+      const activePage = getActivePage(state.project);
+      // 一个对象同时只属于一个组，先把它从旧组里摘出来
+      const drop = new Set(ids);
+      const cleaned = normalizeGroups(activePage).map((group) => ({
+        ...group,
+        memberIds: group.memberIds.filter((id) => !drop.has(id))
+      }));
+      const group: LayerGroup = {
+        id: uuidv4(),
+        name: name.trim() || "分组 " + (cleaned.filter((item) => item.memberIds.length > 0).length + 1),
+        memberIds: [...ids]
+      };
+      const next = [...cleaned.filter((item) => item.memberIds.length > 0), group];
+      const historyState = withHistory(
+        state,
+        updateActivePage(state.project, (page) => ({ ...page, layerGroups: next })),
+        "已把 " + ids.length + " 项归入「" + group.name + "」"
+      );
+      return historyState ?? state;
+    });
+  },
+
+  renameLayerGroup: (groupId, name) => {
+    set((state) => {
+      const activePage = getActivePage(state.project);
+      const next = normalizeGroups(activePage).map((group) =>
+        group.id === groupId ? { ...group, name: name.trim() || group.name } : group
+      );
+      const historyState = withHistory(
+        state,
+        updateActivePage(state.project, (page) => ({ ...page, layerGroups: next })),
+        "分组已改名"
+      );
+      return historyState ?? state;
+    });
+  },
+
+  toggleLayerGroup: (groupId) => {
+    // 折叠是浏览状态，不进撤销历史
+    set((state) => {
+      const activePage = getActivePage(state.project);
+      const next = normalizeGroups(activePage).map((group) =>
+        group.id === groupId ? { ...group, collapsed: !group.collapsed } : group
+      );
+      return {
+        project: updateActivePage(state.project, (page) => ({ ...page, layerGroups: next }))
+      };
+    });
+  },
+
+  removeLayerGroup: (groupId) => {
+    set((state) => {
+      const activePage = getActivePage(state.project);
+      const next = normalizeGroups(activePage).filter((group) => group.id !== groupId);
+      const historyState = withHistory(
+        state,
+        updateActivePage(state.project, (page) => ({ ...page, layerGroups: next })),
+        "已解散分组（里面的内容都还在）"
+      );
+      return historyState ?? state;
+    });
+  },
+
+  addToLayerGroup: (ids) => {
+    if (ids.length === 0) {
+      return;
+    }
+    set((state) => {
+      const activePage = getActivePage(state.project);
+      const groups = normalizeGroups(activePage);
+      // 已经属于某个组的对象，追加到它自己那个组里
+      const target = groups.find((group) => ids.some((id) => group.memberIds.includes(id)));
+      if (!target) {
+        return state;
+      }
+      const merged = Array.from(new Set([...target.memberIds, ...ids]));
+      const next = groups.map((group) => (group.id === target.id ? { ...group, memberIds: merged } : group));
+      const historyState = withHistory(
+        state,
+        updateActivePage(state.project, (page) => ({ ...page, layerGroups: next })),
+        "已加入分组"
+      );
+      return historyState ?? state;
+    });
+  },
+
+  removeFromLayerGroup: (ids) => {
+    if (ids.length === 0) {
+      return;
+    }
+    set((state) => {
+      const activePage = getActivePage(state.project);
+      const drop = new Set(ids);
+      const next = normalizeGroups(activePage)
+        .map((group) => ({ ...group, memberIds: group.memberIds.filter((id) => !drop.has(id)) }))
+        .filter((group) => group.memberIds.length > 0);
+      const historyState = withHistory(
+        state,
+        updateActivePage(state.project, (page) => ({ ...page, layerGroups: next })),
+        "已移出分组"
+      );
+      return historyState ?? state;
+    });
   },
 
   moveLayer: (id, move) => {

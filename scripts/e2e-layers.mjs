@@ -116,7 +116,7 @@ record(
   base.some((r) => r.kind === "panel") && base.some((r) => r.kind === "bubble"),
   base.map((r) => r.kind).join(",")
 );
-record("列表按层序排列，最后一行是顶层", base.length > 1, base.map((r) => r.text.slice(0, 8)).join(" | "));
+record("列表第一行是最顶层", base.length > 1, base.map((r) => r.text.slice(0, 8)).join(" | "));
 await page.screenshot({ path: SHOT_DIR + "/layers-panel.png" });
 
 // ---------- 2) 点列表能选中 ----------
@@ -137,7 +137,11 @@ await page.evaluate((id) => {
 }, bubbleId);
 await sleep(800);
 const orderBottom = (await layerRows()).map((r) => r.id);
-record("「置于底层」把气泡挪到第一行", orderBottom[0] === bubbleId, "底层=" + orderBottom[0]?.slice(0, 10));
+record(
+  "「置于底层」把气泡挪到最后一行",
+  orderBottom[orderBottom.length - 1] === bubbleId,
+  "底层=" + orderBottom[orderBottom.length - 1]?.slice(0, 10)
+);
 
 await page.evaluate((id) => {
   document.querySelector('[data-layer-move-id="' + id + '"][data-layer-move="top"]')?.click();
@@ -145,9 +149,9 @@ await page.evaluate((id) => {
 await sleep(800);
 const orderAfterTop = (await layerRows()).map((r) => r.id);
 record(
-  "「置于顶层」把气泡挪回最后一行",
-  orderAfterTop[orderAfterTop.length - 1] === bubbleId && orderBottom.join() !== orderAfterTop.join(),
-  "顶层=" + orderAfterTop[orderAfterTop.length - 1]?.slice(0, 10)
+  "「置于顶层」把气泡挪回第一行",
+  orderAfterTop[0] === bubbleId && orderBottom.join() !== orderAfterTop.join(),
+  "顶层=" + orderAfterTop[0]?.slice(0, 10)
 );
 
 // ---------- 4) 被盖住的东西仍然能选中（核心痛点） ----------
@@ -208,9 +212,9 @@ await sleep(1000);
 
 const afterSink = await layerRows();
 record(
-  "把铺满层置底后它排到了最后一名之前",
-  afterSink[0]?.id === coverId,
-  "底层=" + afterSink[0]?.kind
+  "把铺满层置底后它排到最后一行",
+  afterSink[afterSink.length - 1]?.id === coverId,
+  "底层=" + afterSink[afterSink.length - 1]?.kind
 );
 
 // ---------- 6) 属性面板也有一排层序按钮 ----------

@@ -201,6 +201,17 @@ export type ProjectPage = {
   // 统一的层序：从最底层到最顶层排列 id。
   // 不存则按「分镜 → 图片层与贴纸 → 气泡」的默认顺序推导（老项目的行为）
   layerOrder?: string[];
+  // 用户给对象起的名字（id → 自定义名）。没起就显示自动生成的描述
+  layerNames?: Record<string, string>;
+  // 层级列表里的分组，只影响列表怎么组织，不影响画布叠放顺序
+  layerGroups?: LayerGroup[];
+};
+
+export type LayerGroup = {
+  id: string;
+  name: string;
+  memberIds: string[];
+  collapsed?: boolean;
 };
 
 export type Project = {
