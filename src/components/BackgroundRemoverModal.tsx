@@ -178,20 +178,20 @@ export default function BackgroundRemoverModal({
             </p>
           </div>
 
-          <div className="space-y-3">
-            <label className="block space-y-1">
-              <span className="text-[11px] text-[var(--text-secondary)]">背景色</span>
+          <div className="space-y-5">
+            <section data-bg-section="color" className="space-y-2">
+              <p className="text-[11px] font-medium text-[var(--text-primary)]">背景色</p>
               <div className="flex items-center gap-2">
                 <input
                   type="color"
-                  className="studio-input h-8 w-16 px-1"
+                  className="studio-input h-9 w-16 px-1"
                   data-bg-color="1"
                   value={toHex(color)}
                   onChange={(event) => setColor(fromHex(event.target.value))}
                 />
                 <button
                   type="button"
-                  className="studio-btn h-8 px-2 text-[11px]"
+                  className="studio-btn h-9 px-3 text-[11px]"
                   data-bg-detect="1"
                   onClick={() => {
                     void detectBackgroundColor(source).then(setColor);
@@ -200,10 +200,16 @@ export default function BackgroundRemoverModal({
                   自动取色
                 </button>
               </div>
-            </label>
+              <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
+                打开时会自动贴着图片四边采样猜一次；偏了就点左边色块自己改。
+              </p>
+            </section>
 
-            <label className="block space-y-1">
-              <span className="text-[11px] text-[var(--text-secondary)]">容差 {tolerance}</span>
+            <section data-bg-section="tolerance" className="space-y-2 border-t border-[var(--line-soft)] pt-4">
+              <div className="flex items-baseline justify-between">
+                <p className="text-[11px] font-medium text-[var(--text-primary)]">颜色容差</p>
+                <span className="text-[11px] text-[var(--text-secondary)]">{tolerance}</span>
+              </div>
               <input
                 type="range"
                 min={0}
@@ -214,10 +220,16 @@ export default function BackgroundRemoverModal({
                 onChange={(event) => setTolerance(Number(event.target.value))}
                 className="w-full accent-[var(--accent)]"
               />
-            </label>
+              <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
+                决定多接近背景色才算背景。底色有渐变或压缩噪点就往大调；调过头会把浅色线条一起吃进去。
+              </p>
+            </section>
 
-            <label className="block space-y-1">
-              <span className="text-[11px] text-[var(--text-secondary)]">边缘羽化 {feather}</span>
+            <section data-bg-section="feather" className="space-y-2 border-t border-[var(--line-soft)] pt-4">
+              <div className="flex items-baseline justify-between">
+                <p className="text-[11px] font-medium text-[var(--text-primary)]">边缘羽化</p>
+                <span className="text-[11px] text-[var(--text-secondary)]">{feather}</span>
+              </div>
               <input
                 type="range"
                 min={0}
@@ -228,10 +240,13 @@ export default function BackgroundRemoverModal({
                 onChange={(event) => setFeather(Number(event.target.value))}
                 className="w-full accent-[var(--accent)]"
               />
-            </label>
+              <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
+                调大让边界过渡柔和，避免留下硬锯齿；调太大会让主体边缘发糊。
+              </p>
+            </section>
 
-            <p className="rounded-lg bg-[var(--panel-1)] px-2.5 py-2 text-[11px] leading-5 text-[var(--text-secondary)]">
-              只去掉与背景色接近的像素，线条和主体会保留。原图不会被改坏，结果可撤销，不满意按 Ctrl+Z 退回。
+            <p className="rounded-lg bg-[var(--panel-1)] px-3 py-2.5 text-[10px] leading-5 text-[var(--text-secondary)]">
+              只去掉与背景色接近的像素，线条和主体会保留。原图不会被改坏，结果可撤销，不满意按 `Ctrl+Z` 退回。
             </p>
           </div>
         </div>

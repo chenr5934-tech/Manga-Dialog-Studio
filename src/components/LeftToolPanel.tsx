@@ -10,8 +10,9 @@ import {
   readImageFileAsDataUrl
 } from "../lib/dnd";
 import { collectProjectImages, findPooledImage } from "../lib/imagePool";
+import { fetchUploadedImages, makeUploadedImage, persistUploadedImages } from "../lib/uploads";
 import BackgroundRemoverModal from "./BackgroundRemoverModal";
-import TileImageModal from "./TileImageModal";
+import FillCanvasModal from "./FillCanvasModal";
 import { normalizePreset } from "../lib/presets";
 import { getActivePage, useEditorStore } from "../lib/store";
 import { StickerDef, listStickerGroups, normalizeCustomStickers } from "../lib/stickers";
@@ -104,6 +105,9 @@ export default function LeftToolPanel({
   const openPresetEditor = useEditorStore((state) => state.openPresetEditor);
   const addStickerOverlay = useEditorStore((state) => state.addStickerOverlay);
   const addOverlayImage = useEditorStore((state) => state.addOverlayImage);
+  const uploadedImages = useEditorStore((state) => state.uploadedImages);
+  const setUploadedImages = useEditorStore((state) => state.setUploadedImages);
+  const addUploadedImages = useEditorStore((state) => state.addUploadedImages);
   const addCustomStickers = useEditorStore((state) => state.addCustomStickers);
   const removeCustomSticker = useEditorStore((state) => state.removeCustomSticker);
   const setNotice = useEditorStore((state) => state.setNotice);
@@ -122,10 +126,10 @@ export default function LeftToolPanel({
   const stickerInputRef = useRef<HTMLInputElement | null>(null);
 
   const stickerGroups = listStickerGroups();
-  const pooledImages = collectProjectImages(project);
+  const pooledImages = collectProjectImages(project, uploadedImages);
   const activeCanvas = getActivePage(project).canvas;
-  const bgTargetImage = bgTargetId ? findPooledImage(project, bgTargetId) : undefined;
-  const tileTargetImage = tileTargetId ? findPooledImage(project, tileTargetId) : undefined;
+  const bgTargetImage = bgTargetId ? findPooledImage(project, bgTargetId, uploadedImages) : undefined;
+  const tileTargetImage = tileTargetId ? findPooledImage(project, tileTargetId, uploadedImages) : undefined;
   const customGroupName = "自定义";
   const activeStickerGroup = stickerGroup || stickerGroups[0]?.name || "";
 
@@ -134,6 +138,19 @@ export default function LeftToolPanel({
       setLibraryOpen(false);
     }
   }, [contentMode]);
+
+  // 启动时把 uploads/ 里的常驻原稿读进来，它们不依赖当前项目是否存在
+  useEffect(() => {
+    let cancelled = false;
+    void fetchUploadedImages().then((list) => {
+      if (!cancelled && list.length > 0) {
+        setUploadedImages(list);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [setUploadedImages]);
 
   const builtinPresets = bubblePresets.filter((preset) => preset.builtin);
   const userPresets = bubblePresets.filter((preset) => !preset.builtin);
@@ -645,11 +662,11 @@ export default function LeftToolPanel({
                         type="button"
                         data-pooled-image-tile={item.id}
                         className="studio-btn h-6 px-1.5 text-[10px] leading-none"
-                        title="把这张图重复平铺，铺满整张画布"
+                        title="把这张图铺满整张画布，可选拉伸或等比"
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={() => setTileTargetId(item.id)}
                       >
-                        平铺
+                        铺满
                       </button>
                     </div>
                   </div>
@@ -816,7 +833,7 @@ export default function LeftToolPanel({
         }}
       />
 
-      <TileImageModal
+      <FillCanvasModal
         source={tileTargetImage?.src ?? ""}
         open={Boolean(tileTargetImage)}
         canvasWidth={activeCanvas.width}
@@ -830,7 +847,7 @@ export default function LeftToolPanel({
             size: { width: activeCanvas.width, height: activeCanvas.height },
             anchor: { x: activeCanvas.width / 2, y: activeCanvas.height / 2 }
           });
-          setNotice("已生成平铺图片，铺满整张画布");
+          setNotice("已生成铺满画布的图片层");
         }}
       />
     </aside>

@@ -16,6 +16,7 @@ import {
   getStickerDef,
   persistCustomStickers
 } from "./stickers";
+import { UploadedImage } from "./uploads";
 import {
   clamp,
   normalizeBubbleSize,
@@ -92,6 +93,8 @@ type EditorStore = {
   stickerPickerOpen: boolean;
   // 用户导入的自定义贴纸，随浏览器本地保存，也可整体存进 stickers/ 目录
   customStickers: CustomSticker[];
+  // uploads/ 里的常驻原稿副本，左侧「已导入图片」栏会优先展示它们
+  uploadedImages: UploadedImage[];
   // 右侧栏显示属性检查器还是 Agent 面板
   sidePanel: "inspector" | "agent";
   // Agent 的作用范围：限定后 agent 只能在这个矩形内新增内容
@@ -184,6 +187,8 @@ type EditorStore = {
   openStickerPicker: () => void;
   closeStickerPicker: () => void;
   addCustomStickers: (list: CustomSticker[]) => void;
+  setUploadedImages: (list: UploadedImage[]) => void;
+  addUploadedImages: (list: UploadedImage[]) => void;
   removeCustomSticker: (id: string) => void;
   replaceCustomStickers: (list: CustomSticker[]) => void;
   closeTemplateLibrary: () => void;
@@ -1979,6 +1984,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   templateLibraryOpen: false,
   stickerPickerOpen: false,
   customStickers: getInitialCustomStickers(),
+  uploadedImages: [],
   sidePanel: "inspector",
   agentScope: null,
   agentScopePicking: false,
@@ -2964,6 +2970,24 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set(() => ({
       stickerPickerOpen: true
     }));
+  },
+
+  setUploadedImages: (list) => {
+    set({ uploadedImages: list });
+  },
+
+  addUploadedImages: (list) => {
+    if (list.length === 0) {
+      return;
+    }
+    set((state) => {
+      const seen = new Set(state.uploadedImages.map((item) => item.image));
+      const fresh = list.filter((item) => !seen.has(item.image));
+      if (fresh.length === 0) {
+        return state;
+      }
+      return { uploadedImages: [...state.uploadedImages, ...fresh] };
+    });
   },
 
   addCustomStickers: (list) => {

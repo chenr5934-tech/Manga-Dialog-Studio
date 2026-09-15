@@ -230,8 +230,8 @@ const actions = await page.evaluate(() => {
   };
 });
 record(
-  "图片缩略图上有「抠图」和「平铺」两个按钮",
-  actions.hasBg && actions.hasTile && actions.bgText === "抠图" && actions.tileText === "平铺",
+  "图片缩略图上有「抠图」和「铺满」两个按钮",
+  actions.hasBg && actions.hasTile && actions.bgText === "抠图" && actions.tileText === "铺满",
   actions.bgText + " / " + actions.tileText
 );
 await page.screenshot({ path: SHOT_DIR + "/pool-actions.png" });
@@ -324,70 +324,92 @@ await page.evaluate((id) => {
 await sleep(800);
 
 const tileModal = await page.evaluate(() => {
-  const modal = document.querySelector('[data-tile-modal="1"]');
+  const modal = document.querySelector('[data-fill-modal="1"]');
   if (!modal) {
     return null;
   }
-  const preview = modal.querySelector("[data-tile-preview]");
   return {
     open: true,
-    cols: modal.querySelector("[data-tile-cols]")?.value ?? "",
-    rows: modal.querySelector("[data-tile-rows]")?.value ?? "",
-    backgroundSize: preview ? preview.style.backgroundSize : "",
-    cropSliders: modal.querySelectorAll("[data-tile-crop]").length
+    hasPreview: Boolean(modal.querySelector("[data-fill-preview]")),
+    modes: Array.from(modal.querySelectorAll("[data-fill-mode-option]")).map((item) =>
+      item.getAttribute("data-fill-mode-option")
+    ),
+    modeLabels: Array.from(modal.querySelectorAll("[data-fill-mode-option]")).map((item) =>
+      (item.innerText ?? "").trim().split("\n")[0]
+    ),
+    sections: Array.from(modal.querySelectorAll("[data-fill-section]")).map((item) =>
+      item.getAttribute("data-fill-section")
+    )
   };
 });
 record(
-  "点「平铺」会打开平铺窗口，并带平铺单元选择",
-  Boolean(tileModal?.open) && tileModal.cropSliders === 4,
-  "单元选择滑条=" + (tileModal?.cropSliders ?? 0)
+  "点「铺满」会打开铺满窗口并带画布预览",
+  Boolean(tileModal?.open) && tileModal.hasPreview,
+  "预览=" + (tileModal?.hasPreview ? "有" : "无")
 );
 record(
-  "平铺窗口默认按画布比例给出列数行数",
-  tileModal?.cols === "3" && tileModal?.rows === "4",
-  "列=" + (tileModal?.cols ?? "?") + " 行=" + (tileModal?.rows ?? "?")
+  "铺满窗口提供拉伸 / 等比填满 / 等比适应三种方式",
+  tileModal?.modes.join(",") === "stretch,cover,contain",
+  tileModal?.modeLabels.join(" / ")
 );
-await page.screenshot({ path: SHOT_DIR + "/pool-tile-modal.png" });
-
-// 改份数，预览的 background-size 应该跟着变小
-await setRange("[data-tile-cols]", 2);
-await setRange("[data-tile-rows]", 2);
-await sleep(400);
-const previewAfter = await page.evaluate(() => {
-  const preview = document.querySelector("[data-tile-preview]");
-  return preview ? preview.style.backgroundSize : "";
-});
-const cellBefore = Number((tileModal?.backgroundSize ?? "0px").split("px")[0]);
-const cellAfter = Number((previewAfter ?? "0px").split("px")[0]);
 record(
-  "改列数行数会实时更新平铺预览",
-  cellAfter > cellBefore && Number.isFinite(cellAfter),
-  "3×4 单元宽=" + Math.round(cellBefore) + "px → 2×2 单元宽=" + Math.round(cellAfter) + "px"
+  "参数按铺满方式 / 对齐 / 尺寸分区，不再堆在一起",
+  tileModal?.sections.join(",") === "mode,align,info",
+  tileModal?.sections.join(" / ")
+);
+await page.screenshot({ path: SHOT_DIR + "/pool-fill-modal.png" });
+
+const fitOf = async (mode) => {
+  await page.evaluate((value) => {
+    document.querySelector('[data-fill-mode-option="' + value + '"]')?.click();
+  }, mode);
+  await sleep(350);
+  return page.evaluate(() => {
+    const img = document.querySelector("[data-fill-preview] img");
+    return img ? img.style.objectFit : "";
+  });
+};
+const fitStretch = await fitOf("stretch");
+const fitCover = await fitOf("cover");
+const fitContain = await fitOf("contain");
+record(
+  "切换铺满方式会实时改掉预览效果",
+  fitStretch === "fill" && fitCover === "cover" && fitContain === "contain",
+  "拉伸=" + fitStretch + " 填满=" + fitCover + " 适应=" + fitContain
 );
 
-// 收窄平铺单元，验证裁剪滑条也在起作用
-await setRange('[data-tile-crop="w"]', 50);
-await sleep(300);
-const cropApplied = await page.evaluate(() => {
-  const input = document.querySelector('[data-tile-crop="w"]');
-  return input ? Number(input.value) : -1;
+// 对齐按钮只在拉伸模式下置灰，所以必须先切回拉伸再检查
+await fitOf("stretch");
+const alignDisabled = await page.evaluate(() => {
+  const button = document.querySelector('[data-fill-align-option="top"]');
+  return button ? button.disabled : null;
 });
-record("平铺单元的选取范围可以自定义调节", cropApplied === 50, "单元宽度=" + cropApplied + "%");
+record("拉伸铺满时对齐按钮置灰（占满画布无需对齐）", alignDisabled === true, "禁用=" + alignDisabled);
+await fitOf("contain");
+const alignEnabled = await page.evaluate(() => {
+  const button = document.querySelector('[data-fill-align-option="top"]');
+  return button ? button.disabled : null;
+});
+record("等比模式下对齐按钮恢复可用", alignEnabled === false, "禁用=" + alignEnabled);
 
+await fitOf("stretch");
 const canvasSize = await readStats();
-
-await page.evaluate(() => document.querySelector('[data-tile-apply="1"]')?.click());
+await page.evaluate(() => document.querySelector('[data-fill-apply="1"]')?.click());
 await sleep(2600);
+
 const afterTile = {
-  modalGone: await page.evaluate(() => !document.querySelector('[data-tile-modal="1"]')),
+  modalGone: await page.evaluate(() => !document.querySelector('[data-fill-modal="1"]')),
   fields: await readPanelFields(),
   green: await colorRatio([34, 197, 94]),
-  // 0.5 正好落在两行格子的交界上，那里对应源图 y=0（纯绿）；取第一行格子的中线
-  segments: await colorSegments([217, 70, 239], 0.25)
+  magenta: await colorRatio([217, 70, 239]),
+  // 底色是白色。铺满之后画布上不该再看到它。
+  // 注意：图片层落地时是选中态，Konva 的选中框和锚点画在同一张 canvas 上，
+  // 会占掉 8% 左右像素，所以判据用「画面内容占比」而不是「接近 100%」。
+  white: await colorRatio([255, 255, 255])
 };
-record("平铺后窗口自动关闭", afterTile.modalGone);
+record("铺满后窗口自动关闭", afterTile.modalGone);
 record(
-  "平铺结果按画布尺寸铺满整张画布",
+  "铺满结果与画布等大",
   Number.isFinite(afterTile.fields["宽度"]) &&
     Math.abs(afterTile.fields["宽度"] - canvasSize.canvasWidth) <= 2 &&
     Math.abs(afterTile.fields["高度"] - canvasSize.canvasHeight) <= 2,
@@ -401,14 +423,13 @@ record(
     canvasSize.canvasHeight
 );
 record(
-  "平铺的图案真的铺到了画布上",
-  afterTile.green > 0.5,
-  "绿色占画布 " + (afterTile.green * 100).toFixed(1) + "%"
-);
-record(
-  "2 列平铺在画布上形成 2 个重复单元",
-  afterTile.segments === 2,
-  "水平中线上的洋红段数=" + afterTile.segments + "（期望 2）"
+  "拉伸铺满后画布被这张图占满，没有露出底色",
+  afterTile.green + afterTile.magenta > 0.9 && afterTile.white < 0.02,
+  "图形 " +
+    ((afterTile.green + afterTile.magenta) * 100).toFixed(1) +
+    "%，残留底色 " +
+    (afterTile.white * 100).toFixed(1) +
+    "%"
 );
 await page.screenshot({ path: SHOT_DIR + "/pool-after-tile.png" });
 

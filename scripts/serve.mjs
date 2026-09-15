@@ -18,11 +18,13 @@ const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(SCRIPT_DIR, "..");
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
 
-// 两个资料库：气泡预设（单个对话框模板）与项目模板（整册版式）
+// 资料库：气泡预设（单个对话框模板）、项目模板（整册版式）、
+// 自定义贴纸，以及已导入图片（原稿的常驻副本，删掉页面也不会丢）
 const LIBRARIES = {
   presets: join(PROJECT_ROOT, "presets"),
   templates: join(PROJECT_ROOT, "templates"),
-  stickers: join(PROJECT_ROOT, "stickers")
+  stickers: join(PROJECT_ROOT, "stickers"),
+  uploads: join(PROJECT_ROOT, "uploads")
 };
 
 const AGENT_CONFIG_DIR = join(PROJECT_ROOT, "config");
@@ -220,6 +222,12 @@ function describeLibraryFile(kind, parsed) {
     return { count, detail: count + " 张自定义贴纸" };
   }
 
+  if (kind === "uploads") {
+    const list = Array.isArray(parsed) ? parsed : parsed?.images;
+    const count = Array.isArray(list) ? list.length : 0;
+    return { count, detail: count + " 张已导入图片" };
+  }
+
   const pages = Array.isArray(parsed?.pages) ? parsed.pages : [];
   const panels = pages.reduce((sum, page) => sum + (Array.isArray(page?.panels) ? page.panels.length : 0), 0);
   const bubbles = pages.reduce((sum, page) => sum + (Array.isArray(page?.bubbles) ? page.bubbles.length : 0), 0);
@@ -346,6 +354,7 @@ function createLibraryHandler(kind) {
 const handlePresetApi = createLibraryHandler("presets");
 const handleTemplateApi = createLibraryHandler("templates");
 const handleStickerApi = createLibraryHandler("stickers");
+const handleUploadApi = createLibraryHandler("uploads");
 
 // Agent 模式：配置读写 + 对话转发。
 // 密钥只在本地服务里使用，浏览器始终拿不到明文。
@@ -571,7 +580,8 @@ export function startServer({ root = "dist", port = 8737, open = true } = {}) {
     const libraryRoute = [
       { prefix: "/api/templates", handler: handleTemplateApi },
       { prefix: "/api/presets", handler: handlePresetApi },
-      { prefix: "/api/stickers", handler: handleStickerApi }
+      { prefix: "/api/stickers", handler: handleStickerApi },
+      { prefix: "/api/uploads", handler: handleUploadApi }
     ].find((entry) => pathname.startsWith(entry.prefix));
 
     if (libraryRoute) {

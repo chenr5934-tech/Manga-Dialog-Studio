@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PageImportItem, PageImportMode } from "../types";
 import { IMAGE_FILE_ACCEPT, loadImageElement, readImageFileAsDataUrl } from "../lib/dnd";
+import { makeUploadedImage, persistUploadedImages } from "../lib/uploads";
 import { useEditorStore } from "../lib/store";
 
 const actionButtonClass = "studio-btn h-7 px-2 text-[11px] disabled:cursor-not-allowed disabled:opacity-40";
@@ -10,6 +11,8 @@ export default function ImportImagesModal() {
   const open = useEditorStore((state) => state.importDialogOpen);
   const closeImportDialog = useEditorStore((state) => state.closeImportDialog);
   const importImagesAsPages = useEditorStore((state) => state.importImagesAsPages);
+  const addUploadedImages = useEditorStore((state) => state.addUploadedImages);
+  const setNotice = useEditorStore((state) => state.setNotice);
   const pageCount = useEditorStore((state) => state.project.pages.length);
 
   const [items, setItems] = useState<PageImportItem[]>([]);
@@ -133,6 +136,18 @@ export default function ImportImagesModal() {
         return;
       }
     }
+
+    // 顺手在 uploads/ 留一份常驻副本：之后把页面或图片层删掉，
+    // 左侧「已导入图片」里依然找得到这张原稿
+    const stored = items.map((item) =>
+      makeUploadedImage(item.name, item.dataUrl, item.width, item.height)
+    );
+    addUploadedImages(stored);
+    void persistUploadedImages(stored).then((ok) => {
+      if (!ok) {
+        setNotice("原稿已导入，但写入 uploads/ 失败");
+      }
+    });
 
     importImagesAsPages(items, mode);
   };

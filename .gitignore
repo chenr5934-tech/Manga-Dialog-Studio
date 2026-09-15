@@ -19,3 +19,6 @@ _regression.log
 _regression.out
 _regression.stdout
 _regression.stderr
+
+# 已导入图片的常驻副本属于个人素材，保留目录说明
+uploads/*.json

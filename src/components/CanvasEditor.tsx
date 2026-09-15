@@ -609,6 +609,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
   const createPanelFromRect = useEditorStore((state) => state.createPanelFromRect);
   const addStickerOverlay = useEditorStore((state) => state.addStickerOverlay);
   const addOverlayImage = useEditorStore((state) => state.addOverlayImage);
+  const uploadedImages = useEditorStore((state) => state.uploadedImages);
   const applyImageToPanel = useEditorStore((state) => state.applyImageToPanel);
   const createEllipsePanelFromRect = useEditorStore((state) => state.createEllipsePanelFromRect);
   const addBubbleFromPreset = useEditorStore((state) => state.addBubbleFromPreset);
@@ -1321,7 +1322,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
               if (pooledId) {
                 const liveProject = useEditorStore.getState().project;
                 const livePage = getActivePage(liveProject);
-                const pooled = findPooledImage(liveProject, pooledId);
+                // 必须和左侧「已导入图片」用同一份常驻列表，否则索引会对不上
+                const pooled = findPooledImage(liveProject, pooledId, uploadedImages);
                 if (!pooled) {
                   return;
                 }
