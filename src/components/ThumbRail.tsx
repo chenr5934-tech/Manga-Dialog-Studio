@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Group, Image as KonvaImage, Layer, Rect, Shape, Stage } from "react-konva";
 import useImage from "use-image";
 import { Panel, ProjectPage } from "../types";
@@ -191,8 +191,16 @@ export default function ThumbRail() {
   const addPage = useEditorStore((state) => state.addPage);
   const deletePage = useEditorStore((state) => state.deletePage);
   const movePage = useEditorStore((state) => state.movePage);
+  const reorderPages = useEditorStore((state) => state.reorderPages);
+  const duplicatePage = useEditorStore((state) => state.duplicatePage);
 
   const listRef = useRef<HTMLDivElement | null>(null);
+  // 拖拽用 ref 记 id：dragstart 之后 dragover/drop 是同步来的，
+  // 走 state 的话这时还没提交，读到的永远是 null
+  const dragIdRef = useRef<string | null>(null);
+  const dropRef = useRef<{ id: string; position: "before" | "after" } | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropMark, setDropMark] = useState<{ id: string; position: "before" | "after" } | null>(null);
   const activeIndex = Math.max(
     0,
     project.pages.findIndex((page) => page.id === project.activePageId)
@@ -249,17 +257,77 @@ export default function ThumbRail() {
         {project.pages.map((page, index) => {
           const isActive = page.id === project.activePageId;
           return (
-            <button
+            <div
               key={page.id}
-              type="button"
               data-thumb-index={index}
               data-page-thumb={page.id}
+              draggable
+              onDragStart={(event) => {
+                dragIdRef.current = page.id;
+                setDragId(page.id);
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/plain", page.id);
+              }}
+              onDragOver={(event) => {
+                const dragging = dragIdRef.current;
+                if (!dragging || dragging === page.id) {
+                  return;
+                }
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                const rect = event.currentTarget.getBoundingClientRect();
+                const position = event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+                dropRef.current = { id: page.id, position };
+                setDropMark((prev) =>
+                  prev?.id === page.id && prev.position === position ? prev : { id: page.id, position }
+                );
+              }}
+              onDragLeave={() => {
+                setDropMark((prev) => (prev?.id === page.id ? null : prev));
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const dragging = dragIdRef.current;
+                if (dragging && dragging !== page.id) {
+                  reorderPages(
+                    dragging,
+                    page.id,
+                    dropRef.current?.id === page.id ? dropRef.current.position : "before"
+                  );
+                }
+                dragIdRef.current = null;
+                dropRef.current = null;
+                setDragId(null);
+                setDropMark(null);
+              }}
+              onDragEnd={() => {
+                dragIdRef.current = null;
+                dropRef.current = null;
+                setDragId(null);
+                setDropMark(null);
+              }}
+              role="button"
+              tabIndex={0}
               onClick={() => setActivePage(page.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setActivePage(page.id);
+                }
+              }}
               title={`${page.name} · 分镜 ${page.panels.length} · 文字 ${page.bubbles.length}`}
-              className={`thumb-card group relative flex w-full flex-col items-center gap-1 rounded-lg p-1.5 transition ${
+              className={`thumb-card group relative flex w-full cursor-grab flex-col items-center gap-1 rounded-lg p-1.5 transition active:cursor-grabbing ${
                 isActive
                   ? "thumb-card-active"
                   : "hover:bg-[var(--panel-0)]"
+              }${
+                dragId === page.id ? " opacity-40" : ""
+              }${
+                dropMark?.id === page.id
+                  ? dropMark.position === "before"
+                    ? " shadow-[inset_0_3px_0_0_var(--accent)]"
+                    : " shadow-[inset_0_-3px_0_0_var(--accent)]"
+                  : ""
               }`}
             >
               <span
@@ -275,7 +343,7 @@ export default function ThumbRail() {
               <span className="text-[10px] text-[var(--text-secondary)]">
                 分镜 {page.panels.length} · 字 {page.bubbles.length}
               </span>
-            </button>
+            </div>
           );
         })}
       </div>
@@ -290,7 +358,16 @@ export default function ThumbRail() {
         >
           ▲
         </button>
-        <button type="button" className={iconButtonClass} onClick={() => addPage()} title="新增页面">
+        <button
+          type="button"
+          data-page-duplicate="1"
+          className={iconButtonClass}
+          onClick={() => duplicatePage(project.activePageId)}
+          title="复制当前页：内容原样复制一份，插在它后面"
+        >
+          ⧉
+        </button>
+        <button type="button" className={iconButtonClass} onClick={() => addPage()} title="新增空白页面">
           ＋
         </button>
         <button

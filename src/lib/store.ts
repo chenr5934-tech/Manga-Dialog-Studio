@@ -156,6 +156,10 @@ type EditorStore = {
   addPage: () => void;
   deletePage: (id: string) => void;
   movePage: (id: string, direction: "up" | "down") => void;
+  // 拖拽改页面顺序：把 dragId 放到 targetId 的前面或后面
+  reorderPages: (dragId: string, targetId: string, position: "before" | "after") => void;
+  // 整页原样复制一份，插在原页后面，插完切到新页
+  duplicatePage: (id: string) => void;
 
   splitGrid: (rows: number, cols: number, gap?: number) => void;
   clearPanels: () => void;
@@ -1600,6 +1604,53 @@ function sanitizePage(page: Partial<ProjectPage> | undefined, index: number): Pr
   };
 }
 
+// 整页复制：所有对象都要换新 id，否则和原页撞车，
+// 层序、命名、分组的引用也得跟着一起换。
+function clonePageWithFreshIds(page: ProjectPage): ProjectPage {
+  const idMap = new Map<string, string>();
+  const freshId = (old: string) => {
+    const next = uuidv4();
+    idMap.set(old, next);
+    return next;
+  };
+
+  const panels = page.panels.map((panel) => ({ ...panel, id: freshId(panel.id) }));
+  const overlays = (page.overlays ?? []).map((overlay) => ({ ...overlay, id: freshId(overlay.id) }));
+  const bubbles = page.bubbles.map((bubble) => ({ ...bubble, id: freshId(bubble.id) }));
+
+  const layerOrder = Array.isArray(page.layerOrder)
+    ? page.layerOrder.map((id) => idMap.get(id) ?? id)
+    : undefined;
+
+  const layerNames = page.layerNames
+    ? Object.fromEntries(
+        Object.entries(page.layerNames)
+          .map(([key, value]) => [idMap.get(key) ?? key, value] as const)
+          .filter(([key]) => idMap.has(key) || Boolean(key))
+      )
+    : undefined;
+
+  const layerGroups = Array.isArray(page.layerGroups)
+    ? page.layerGroups.map((group) => ({
+        ...group,
+        id: uuidv4(),
+        memberIds: group.memberIds.map((id) => idMap.get(id) ?? id)
+      }))
+    : undefined;
+
+  return {
+    ...page,
+    id: uuidv4(),
+    name: page.name + " 副本",
+    panels,
+    overlays,
+    bubbles,
+    layerOrder,
+    layerNames,
+    layerGroups
+  };
+}
+
 function sanitizeLayerNames(input: unknown): Record<string, string> | undefined {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     return undefined;
@@ -2381,6 +2432,55 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       return {
         ...historyState
       };
+    });
+  },
+
+  reorderPages: (dragId, targetId, position) => {
+    set((state) => {
+      if (dragId === targetId) {
+        return state;
+      }
+      const pages = [...state.project.pages];
+      const from = pages.findIndex((page) => page.id === dragId);
+      if (from < 0) {
+        return state;
+      }
+      const [moved] = pages.splice(from, 1);
+      const anchor = pages.findIndex((page) => page.id === targetId);
+      if (anchor < 0) {
+        return state;
+      }
+      pages.splice(position === "before" ? anchor : anchor + 1, 0, moved);
+
+      const historyState = withHistory(
+        state,
+        { ...state.project, pages },
+        `页面已移动：${moved.name}`
+      );
+      return historyState ?? state;
+    });
+  },
+
+  duplicatePage: (id) => {
+    set((state) => {
+      const index = state.project.pages.findIndex((page) => page.id === id);
+      if (index < 0) {
+        return state;
+      }
+      const copy = clonePageWithFreshIds(state.project.pages[index]);
+      const pages = [...state.project.pages];
+      pages.splice(index + 1, 0, copy);
+
+      const historyState = withHistory(
+        state,
+        { ...state.project, pages, activePageId: copy.id },
+        `已复制页面：${state.project.pages[index].name}`
+      );
+      if (!historyState) {
+        return state;
+      }
+      // 复制完切到新页，省得还要自己翻过去看
+      return { ...historyState, selection: undefined };
     });
   },
 
