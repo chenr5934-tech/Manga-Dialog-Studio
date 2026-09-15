@@ -16,7 +16,7 @@ import {
   getStickerDef,
   persistCustomStickers
 } from "./stickers";
-import { UploadedImage } from "./uploads";
+import { hashImage, persistUploadLibrary, UploadedImage } from "./uploads";
 import {
   clamp,
   normalizeBubbleSize,
@@ -95,6 +95,8 @@ type EditorStore = {
   customStickers: CustomSticker[];
   // uploads/ 里的常驻原稿副本，左侧「已导入图片」栏会优先展示它们
   uploadedImages: UploadedImage[];
+  // 用户手动从「已导入图片」列表里移除过的图（存 hash），项目里还在用也不显示
+  hiddenPoolImages: string[];
   // 右侧栏显示属性检查器还是 Agent 面板
   sidePanel: "inspector" | "agent";
   // Agent 的作用范围：限定后 agent 只能在这个矩形内新增内容
@@ -189,6 +191,12 @@ type EditorStore = {
   addCustomStickers: (list: CustomSticker[]) => void;
   setUploadedImages: (list: UploadedImage[]) => void;
   addUploadedImages: (list: UploadedImage[]) => void;
+  setHiddenPoolImages: (list: string[]) => void;
+  // 从 uploads/ 库里真正删掉常驻副本
+  removeUploadedImages: (ids: string[]) => void;
+  // 把项目里正在用的图从列表移除（只是不显示，不动画面）
+  hidePoolImages: (hashes: string[]) => void;
+  restorePoolImages: () => void;
   removeCustomSticker: (id: string) => void;
   replaceCustomStickers: (list: CustomSticker[]) => void;
   closeTemplateLibrary: () => void;
@@ -1985,6 +1993,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   stickerPickerOpen: false,
   customStickers: getInitialCustomStickers(),
   uploadedImages: [],
+  hiddenPoolImages: [],
   sidePanel: "inspector",
   agentScope: null,
   agentScopePicking: false,
@@ -2983,10 +2992,52 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((state) => {
       const seen = new Set(state.uploadedImages.map((item) => item.image));
       const fresh = list.filter((item) => !seen.has(item.image));
-      if (fresh.length === 0) {
+      // 重新导入同一张图 = 我又要用了，顺手把它从「已移除」记录里撤掉，
+      // 否则刚导入就又被过滤掉，看起来像导入失败
+      const revived = new Set(list.map((item) => hashImage(item.image)));
+      const hidden = state.hiddenPoolImages.filter((entry) => !revived.has(entry));
+
+      if (fresh.length === 0 && hidden.length === state.hiddenPoolImages.length) {
         return state;
       }
-      return { uploadedImages: [...state.uploadedImages, ...fresh] };
+
+      const images = [...state.uploadedImages, ...fresh];
+      void persistUploadLibrary({ images, hidden });
+      return { uploadedImages: images, hiddenPoolImages: hidden };
+    });
+  },
+
+  setHiddenPoolImages: (list) => {
+    set({ hiddenPoolImages: list });
+  },
+
+  removeUploadedImages: (ids) => {
+    if (ids.length === 0) {
+      return;
+    }
+    set((state) => {
+      const drop = new Set(ids);
+      const next = state.uploadedImages.filter((item) => !drop.has(item.id));
+      void persistUploadLibrary({ images: next, hidden: state.hiddenPoolImages });
+      return { uploadedImages: next };
+    });
+  },
+
+  hidePoolImages: (hashes) => {
+    if (hashes.length === 0) {
+      return;
+    }
+    set((state) => {
+      const merged = Array.from(new Set([...state.hiddenPoolImages, ...hashes]));
+      void persistUploadLibrary({ images: state.uploadedImages, hidden: merged });
+      return { hiddenPoolImages: merged };
+    });
+  },
+
+  restorePoolImages: () => {
+    set((state) => {
+      void persistUploadLibrary({ images: state.uploadedImages, hidden: [] });
+      return { hiddenPoolImages: [] };
     });
   },
 

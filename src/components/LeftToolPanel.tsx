@@ -10,7 +10,7 @@ import {
   readImageFileAsDataUrl
 } from "../lib/dnd";
 import { collectProjectImages, findPooledImage } from "../lib/imagePool";
-import { fetchUploadedImages, makeUploadedImage, persistUploadedImages } from "../lib/uploads";
+import { fetchUploadLibrary, hashImage, makeUploadedImage, persistUploadedImages } from "../lib/uploads";
 import BackgroundRemoverModal from "./BackgroundRemoverModal";
 import FillCanvasModal from "./FillCanvasModal";
 import { normalizePreset } from "../lib/presets";
@@ -108,6 +108,11 @@ export default function LeftToolPanel({
   const uploadedImages = useEditorStore((state) => state.uploadedImages);
   const setUploadedImages = useEditorStore((state) => state.setUploadedImages);
   const addUploadedImages = useEditorStore((state) => state.addUploadedImages);
+  const hiddenPoolImages = useEditorStore((state) => state.hiddenPoolImages);
+  const setHiddenPoolImages = useEditorStore((state) => state.setHiddenPoolImages);
+  const removeUploadedImages = useEditorStore((state) => state.removeUploadedImages);
+  const hidePoolImages = useEditorStore((state) => state.hidePoolImages);
+  const restorePoolImages = useEditorStore((state) => state.restorePoolImages);
   const addCustomStickers = useEditorStore((state) => state.addCustomStickers);
   const removeCustomSticker = useEditorStore((state) => state.removeCustomSticker);
   const setNotice = useEditorStore((state) => state.setNotice);
@@ -122,14 +127,20 @@ export default function LeftToolPanel({
   const [stickerAdded, setStickerAdded] = useState(0);
   const [bgTargetId, setBgTargetId] = useState<string | null>(null);
   const [tileTargetId, setTileTargetId] = useState<string | null>(null);
+  const [poolSelecting, setPoolSelecting] = useState(false);
+  const [poolSelected, setPoolSelected] = useState<string[]>([]);
   const bubbleInputRef = useRef<HTMLInputElement | null>(null);
   const stickerInputRef = useRef<HTMLInputElement | null>(null);
 
   const stickerGroups = listStickerGroups();
-  const pooledImages = collectProjectImages(project, uploadedImages);
+  const pooledImages = collectProjectImages(project, uploadedImages, hiddenPoolImages);
   const activeCanvas = getActivePage(project).canvas;
-  const bgTargetImage = bgTargetId ? findPooledImage(project, bgTargetId, uploadedImages) : undefined;
-  const tileTargetImage = tileTargetId ? findPooledImage(project, tileTargetId, uploadedImages) : undefined;
+  const bgTargetImage = bgTargetId
+    ? findPooledImage(project, bgTargetId, uploadedImages, hiddenPoolImages)
+    : undefined;
+  const tileTargetImage = tileTargetId
+    ? findPooledImage(project, tileTargetId, uploadedImages, hiddenPoolImages)
+    : undefined;
   const customGroupName = "自定义";
   const activeStickerGroup = stickerGroup || stickerGroups[0]?.name || "";
 
@@ -142,15 +153,19 @@ export default function LeftToolPanel({
   // 启动时把 uploads/ 里的常驻原稿读进来，它们不依赖当前项目是否存在
   useEffect(() => {
     let cancelled = false;
-    void fetchUploadedImages().then((list) => {
-      if (!cancelled && list.length > 0) {
-        setUploadedImages(list);
+    void fetchUploadLibrary().then((library) => {
+      if (cancelled) {
+        return;
       }
+      if (library.images.length > 0) {
+        setUploadedImages(library.images);
+      }
+      setHiddenPoolImages(library.hidden);
     });
     return () => {
       cancelled = true;
     };
-  }, [setUploadedImages]);
+  }, [setHiddenPoolImages, setUploadedImages]);
 
   const builtinPresets = bubblePresets.filter((preset) => preset.builtin);
   const userPresets = bubblePresets.filter((preset) => !preset.builtin);
@@ -249,6 +264,74 @@ export default function LeftToolPanel({
     setStickerGroup(customGroupName);
     setNotice("已导入 " + imported.length + " 张贴纸，并存进 stickers/");
     await persistStickers(imported);
+  };
+
+  // 单张缩略图上的「移除」：只从列表拿掉，随时能用「恢复已移除」找回。
+  // 不碰 uploads/ 里的副本，也不碰画面。
+  const hidePooledImages = (ids: string[]) => {
+    const hashes: string[] = [];
+    for (const id of ids) {
+      const item = pooledImages.find((entry) => entry.id === id);
+      if (item) {
+        hashes.push(hashImage(item.src));
+      }
+    }
+    if (hashes.length === 0) {
+      return;
+    }
+    hidePoolImages(hashes);
+    setPoolSelected([]);
+    setNotice("已从列表移除 " + hashes.length + " 张，可用「恢复已移除」找回");
+  };
+
+  // 多选里的「删除选中」：常驻副本从 uploads/ 里真正删掉，找不回来；
+  // 项目正在引用的图不能动画面，只落一条移除记录。
+  // 两种都要记一笔隐藏，否则项目还在引用的时候它会立刻重新冒出来。
+  const dropPooledImages = (ids: string[]) => {
+    if (ids.length === 0) {
+      return;
+    }
+    const storedIds: string[] = [];
+    const hashes: string[] = [];
+    let liveCount = 0;
+
+    for (const id of ids) {
+      const item = pooledImages.find((entry) => entry.id === id);
+      if (!item) {
+        continue;
+      }
+      hashes.push(hashImage(item.src));
+      if (item.kind === "stored") {
+        const record = uploadedImages.find((entry) => entry.image === item.src);
+        if (record) {
+          storedIds.push(record.id);
+        }
+      } else {
+        liveCount += 1;
+      }
+    }
+
+    if (storedIds.length > 0) {
+      removeUploadedImages(storedIds);
+    }
+    if (hashes.length > 0) {
+      hidePoolImages(hashes);
+    }
+
+    setPoolSelected([]);
+    setNotice(
+      liveCount > 0
+        ? "已移除 " +
+            ids.length +
+            " 张；其中 " +
+            liveCount +
+            " 张正在画面里使用，只是不再显示在列表里，画面不受影响"
+        : "已从「已导入图片」删除 " + ids.length + " 张"
+    );
+  };
+
+  const togglePoolSelect = (id: string) => {
+    setPoolSelected((prev) => (prev.includes(id) ? prev.filter((entry) => entry !== id) : [...prev, id]));
   };
 
   const refreshStickerLibrary = async () => {
@@ -623,8 +706,64 @@ export default function LeftToolPanel({
             <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
               拖到<span className="text-[var(--text-primary)]">分镜</span>上会问你是否放进该格子；
               拖到<span className="text-[var(--text-primary)]">空白处</span>则在上层新建一张图片，可以自由调大小。
-              鼠标移到缩略图上还能抠图或平铺。
+              鼠标移到缩略图上还能抠图、铺满或移除。
             </p>
+
+            <div data-pool-toolbar="1" className="flex flex-wrap items-center gap-1 border-y border-[var(--line-soft)] py-1.5">
+              <button
+                type="button"
+                data-pool-select-toggle="1"
+                className={toolButtonClass + (poolSelecting ? " studio-btn-primary" : "")}
+                onClick={() => {
+                  setPoolSelecting((prev) => !prev);
+                  setPoolSelected([]);
+                }}
+              >
+                {poolSelecting ? "退出多选" : "多选"}
+              </button>
+
+              {poolSelecting ? (
+                <>
+                  <button
+                    type="button"
+                    data-pool-select-all="1"
+                    className={toolButtonClass}
+                    onClick={() =>
+                      setPoolSelected(
+                        poolSelected.length === pooledImages.length ? [] : pooledImages.map((item) => item.id)
+                      )
+                    }
+                  >
+                    {poolSelected.length === pooledImages.length ? "全不选" : "全选"}
+                  </button>
+                  <button
+                    type="button"
+                    data-pool-delete-selected="1"
+                    className={toolButtonClass + " studio-btn-primary"}
+                    disabled={poolSelected.length === 0}
+                    title="勾选的都是导入进来的原稿时，会从 uploads/ 里彻底删掉，找不回来"
+                    onClick={() => dropPooledImages(poolSelected)}
+                  >
+                    删除选中{poolSelected.length > 0 ? "(" + poolSelected.length + ")" : ""}
+                  </button>
+                </>
+              ) : null}
+
+              {hiddenPoolImages.length > 0 ? (
+                <button
+                  type="button"
+                  data-pool-restore="1"
+                  className={toolButtonClass}
+                  title="把之前移除过的图片重新显示出来（不影响画面）"
+                  onClick={() => {
+                    restorePoolImages();
+                    setNotice("已恢复显示 " + hiddenPoolImages.length + " 张被移除的图片");
+                  }}
+                >
+                  恢复已移除({hiddenPoolImages.length})
+                </button>
+              ) : null}
+            </div>
 
             {pooledImages.length === 0 ? (
               <p className="py-4 text-center text-[11px] leading-5 text-[var(--text-secondary)]">
@@ -633,40 +772,89 @@ export default function LeftToolPanel({
                 导入漫画原稿、或给分镜放进图片之后，它们会出现在这里。
               </p>
             ) : (
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-2 gap-2">
                 {pooledImages.map((item) => (
                   <div
                     key={item.id}
-                    draggable
+                    draggable={!poolSelecting}
                     onDragStart={(event) => {
                       event.dataTransfer.setData(POOLED_IMAGE_DND_MIME, item.id);
                       event.dataTransfer.effectAllowed = "copy";
                     }}
                     data-pooled-image={item.id}
+                    data-pooled-image-kind={item.kind}
+                    data-pooled-image-picked={poolSelected.includes(item.id) ? "1" : undefined}
                     title={item.label + "（" + item.detail + "）"}
-                    className="group relative flex aspect-square cursor-grab items-center justify-center overflow-hidden rounded-lg border border-[var(--line-soft)] bg-[var(--panel-1)] transition hover:border-cyan-300/70 active:cursor-grabbing"
+                    onClick={() => {
+                      if (poolSelecting) {
+                        togglePoolSelect(item.id);
+                      }
+                    }}
+                    className={
+                      "group relative flex aspect-square items-center justify-center overflow-hidden rounded-lg border bg-[var(--panel-1)] transition " +
+                      (poolSelecting
+                        ? "cursor-pointer " +
+                          (poolSelected.includes(item.id)
+                            ? "border-cyan-300 ring-2 ring-cyan-300/60"
+                            : "border-[var(--line-soft)] hover:border-cyan-300/70")
+                        : "cursor-grab border-[var(--line-soft)] hover:border-cyan-300/70 active:cursor-grabbing")
+                    }
                   >
                     <img src={item.src} alt={item.label} className="h-full w-full object-cover" draggable={false} />
-                    <div className="absolute inset-x-0 bottom-0 flex justify-center gap-1 bg-black/70 p-1 opacity-0 transition group-hover:opacity-100">
+
+                    {poolSelecting ? (
+                      <span
+                        data-pooled-image-check={item.id}
+                        className={
+                          "absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded border text-[11px] leading-none " +
+                          (poolSelected.includes(item.id)
+                            ? "border-cyan-300 bg-cyan-400 text-black"
+                            : "border-white/70 bg-black/50 text-transparent")
+                        }
+                      >
+                        ✓
+                      </span>
+                    ) : null}
+
+                    <div className="absolute inset-x-0 bottom-0 flex justify-center gap-0.5 bg-black/75 p-1 opacity-0 transition group-hover:opacity-100">
                       <button
                         type="button"
                         data-pooled-image-bg={item.id}
-                        className="studio-btn h-6 px-1.5 text-[10px] leading-none"
+                        className="studio-btn h-6 flex-1 px-1 text-[10px] leading-none"
                         title="一键去掉与背景色接近的像素，抠成透明图后放到画布上"
                         onPointerDown={(event) => event.stopPropagation()}
-                        onClick={() => setBgTargetId(item.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setBgTargetId(item.id);
+                        }}
                       >
                         抠图
                       </button>
                       <button
                         type="button"
                         data-pooled-image-tile={item.id}
-                        className="studio-btn h-6 px-1.5 text-[10px] leading-none"
+                        className="studio-btn h-6 flex-1 px-1 text-[10px] leading-none"
                         title="把这张图铺满整张画布，可选拉伸或等比"
                         onPointerDown={(event) => event.stopPropagation()}
-                        onClick={() => setTileTargetId(item.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setTileTargetId(item.id);
+                        }}
                       >
                         铺满
+                      </button>
+                      <button
+                        type="button"
+                        data-pooled-image-remove={item.id}
+                        className="studio-btn h-6 flex-1 px-1 text-[10px] leading-none"
+                        title="从列表移除，不影响画面，可用「恢复已移除」找回"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          hidePooledImages([item.id]);
+                        }}
+                      >
+                        移除
                       </button>
                     </div>
                   </div>

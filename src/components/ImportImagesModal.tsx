@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PageImportItem, PageImportMode } from "../types";
 import { IMAGE_FILE_ACCEPT, loadImageElement, readImageFileAsDataUrl } from "../lib/dnd";
-import { makeUploadedImage, persistUploadedImages } from "../lib/uploads";
+import { makeUploadedImage } from "../lib/uploads";
 import { useEditorStore } from "../lib/store";
 
 const actionButtonClass = "studio-btn h-7 px-2 text-[11px] disabled:cursor-not-allowed disabled:opacity-40";
@@ -142,12 +142,9 @@ export default function ImportImagesModal() {
     const stored = items.map((item) =>
       makeUploadedImage(item.name, item.dataUrl, item.width, item.height)
     );
+    // addUploadedImages 内部会连隐藏记录一起写回库，这里不要再单独存一次，
+    // 否则会拿过期的 hidden 覆盖掉
     addUploadedImages(stored);
-    void persistUploadedImages(stored).then((ok) => {
-      if (!ok) {
-        setNotice("原稿已导入，但写入 uploads/ 失败");
-      }
-    });
 
     importImagesAsPages(items, mode);
   };

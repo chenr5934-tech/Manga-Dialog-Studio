@@ -1,5 +1,5 @@
 import { Project } from "../types";
-import { UploadedImage } from "./uploads";
+import { hashImage, UploadedImage } from "./uploads";
 
 // 图片池：左侧「已导入图片」栏的数据来源，由两部分合并而成——
 //   1. uploads/ 里的常驻副本（导入过的原稿，删掉页面也不会丢）
@@ -14,10 +14,18 @@ export type PooledImage = {
   detail: string;
   naturalWidth?: number;
   naturalHeight?: number;
+  // stored = uploads/ 里的常驻副本，可以从库里真正删掉；
+  // project = 当前项目正在引用的图，只能从列表里移除，动它会破坏画面
+  kind: "stored" | "project";
 };
 
-export function collectProjectImages(project: Project, stored: UploadedImage[] = []): PooledImage[] {
+export function collectProjectImages(
+  project: Project,
+  stored: UploadedImage[] = [],
+  hidden: string[] = []
+): PooledImage[] {
   const seen = new Set<string>();
+  const hiddenSet = new Set(hidden);
   const list: PooledImage[] = [];
 
   const push = (
@@ -25,26 +33,34 @@ export function collectProjectImages(project: Project, stored: UploadedImage[] =
     label: string,
     source: string,
     width?: number,
-    height?: number
+    height?: number,
+    kind: "stored" | "project" = "project"
   ) => {
     const value = String(src ?? "");
     if (!value || seen.has(value)) {
       return;
     }
+    // 用户手动移除过的图不再露面
+    if (hiddenSet.has(hashImage(value))) {
+      return;
+    }
     seen.add(value);
     list.push({
-      id: "pool-" + list.length,
+      // id 用图片内容的哈希，不能用列表下标：
+      // 拿掉一张之后下标会整体前移，已经发出去的 id 全部失效
+      id: "pool-" + hashImage(value),
       src: value,
       label,
       detail: (width && height ? width + "×" + height + " · " : "") + source,
       naturalWidth: width,
-      naturalHeight: height
+      naturalHeight: height,
+      kind
     });
   };
 
   // 常驻副本排在最前，导入过的原稿一眼就能找到
   for (const item of stored) {
-    push(item.image, item.name, "已导入", item.naturalWidth, item.naturalHeight);
+    push(item.image, item.name, "已导入", item.naturalWidth, item.naturalHeight, "stored");
   }
 
   for (const page of project.pages) {
@@ -83,7 +99,8 @@ export function collectProjectImages(project: Project, stored: UploadedImage[] =
 export function findPooledImage(
   project: Project,
   id: string,
-  stored: UploadedImage[] = []
+  stored: UploadedImage[] = [],
+  hidden: string[] = []
 ): PooledImage | undefined {
-  return collectProjectImages(project, stored).find((item) => item.id === id);
+  return collectProjectImages(project, stored, hidden).find((item) => item.id === id);
 }
