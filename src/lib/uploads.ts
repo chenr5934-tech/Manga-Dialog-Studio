@@ -53,8 +53,14 @@ export async function fetchUploadedImages(): Promise<UploadedImage[]> {
     const payload = await response.json();
     const files = Array.isArray(payload?.files) ? payload.files : [];
     const target = files.find((item: { name?: string }) => String(item?.name ?? "").startsWith(LIBRARY_NAME));
-    const name = String(target?.name ?? LIBRARY_NAME + ".json");
-    const fileResponse = await fetch("/api/uploads/file?name=" + encodeURIComponent(name), { cache: "no-store" });
+    // 库还不存在时直接收工：硬拼文件名去请求只会打出一个 404，
+    // 而这个 404 会污染控制台、让「运行期无报错」的验收误判
+    if (!target) {
+      return [];
+    }
+    const fileResponse = await fetch("/api/uploads/file?name=" + encodeURIComponent(String(target.name)), {
+      cache: "no-store"
+    });
     if (!fileResponse.ok) {
       return [];
     }
@@ -70,14 +76,21 @@ export async function persistUploadedImages(list: UploadedImage[]): Promise<bool
     return true;
   }
   try {
-    const existing = await fetch("/api/uploads/file?name=" + encodeURIComponent(LIBRARY_NAME + ".json"), {
-      cache: "no-store"
-    })
+    // 同样先列目录再决定要不要读：库还不存在时直接读会打 404，
+    // 那个 404 会污染控制台，让「运行期无报错」的验收误判
+    const listing = await fetch("/api/uploads", { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
       .catch(() => null);
+    const files = Array.isArray(listing?.files) ? listing.files : [];
+    const target = files.find((item: { name?: string }) => String(item?.name ?? "").startsWith(LIBRARY_NAME));
+    const previous = target
+      ? await fetch("/api/uploads/file?name=" + encodeURIComponent(String(target.name)), { cache: "no-store" })
+          .then((response) => (response.ok ? response.json() : null))
+          .catch(() => null)
+      : null;
 
     const merged = normalizeUploadedImages([
-      ...normalizeUploadedImages(existing),
+      ...normalizeUploadedImages(previous),
       ...list
     ]);
 

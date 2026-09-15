@@ -1,11 +1,26 @@
 // 全量 e2e 回归 runner。用法：node scripts/_run-regression.mjs
 // 结果同时打到 stdout 和 _regression.log。
-import { readdirSync, writeFileSync, appendFileSync } from "node:fs";
+import { readdirSync, writeFileSync, appendFileSync, copyFileSync, renameSync, rmSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// 好几个套件会走「导入图片」流程，而导入现在会往 uploads/ 写常驻副本。
+// 不隔离的话跑一轮回归就会往用户的素材库里灌几十张测试图。
+const UPLOADS = ROOT + "/uploads/已导入图片.json";
+const UPLOADS_BACKUP = ROOT + "/uploads/已导入图片.json.regression-backup";
+const hadUploads = existsSync(UPLOADS);
+if (hadUploads) {
+  copyFileSync(UPLOADS, UPLOADS_BACKUP);
+}
+const restoreUploads = () => {
+  rmSync(UPLOADS, { force: true });
+  if (hadUploads && existsSync(UPLOADS_BACKUP)) {
+    renameSync(UPLOADS_BACKUP, UPLOADS);
+  }
+};
+
 const files = readdirSync(ROOT + "/scripts").filter((n) => n.startsWith("e2e-") && n.endsWith(".mjs")).sort();
 let passed = 0;
 let failed = 0;
@@ -39,5 +54,7 @@ for (const name of files) {
   appendFileSync(ROOT + "/_regression.log", "=== " + name + " : " + p + "/" + a + " ===\n" + (fails ? fails + "\n" : ""));
   console.log(name + " -> " + p + "/" + a);
 }
+restoreUploads();
+
 appendFileSync(ROOT + "/_regression.log", "TOTAL " + passed + " passed, " + failed + " failed\n");
 console.log("TOTAL " + passed + " passed, " + failed + " failed");

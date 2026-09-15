@@ -395,7 +395,27 @@ record("等比模式下对齐按钮恢复可用", alignEnabled === false, "禁�
 await fitOf("stretch");
 const canvasSize = await readStats();
 await page.evaluate(() => document.querySelector('[data-fill-apply="1"]')?.click());
-await sleep(2600);
+await sleep(1200);
+
+// 新图片层是异步解码的，解码完之前采样会数到 0。
+// 轮询到画面内容稳定下来再判定，别用固定 sleep 赌时序。
+let previousKey = "";
+let stableRounds = 0;
+for (let attempt = 0; attempt < 40; attempt += 1) {
+  const green = await colorRatio([34, 197, 94]);
+  const magenta = await colorRatio([217, 70, 239]);
+  const key = green.toFixed(3) + "/" + magenta.toFixed(3);
+  if (key === previousKey && green + magenta > 0.5) {
+    stableRounds += 1;
+    if (stableRounds >= 2) {
+      break;
+    }
+  } else {
+    stableRounds = 0;
+  }
+  previousKey = key;
+  await sleep(250);
+}
 
 const afterTile = {
   modalGone: await page.evaluate(() => !document.querySelector('[data-fill-modal="1"]')),
