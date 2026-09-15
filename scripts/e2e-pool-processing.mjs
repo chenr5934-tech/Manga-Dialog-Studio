@@ -1,5 +1,6 @@
 import puppeteer from "puppeteer-core";
 import { mkdirSync } from "node:fs";
+import { guardUploads, restoreUploads } from "./_uploads-guard.mjs";
 
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:8737/";
@@ -12,6 +13,8 @@ function record(name, ok, detail = "") {
   results.push({ name, ok });
   console.log((ok ? "PASS  " : "FAIL  ") + name + (detail ? "   [" + detail + "]" : ""));
 }
+
+guardUploads();
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
@@ -540,6 +543,8 @@ record(
 const stats = await readStats();
 console.log("  状态栏：" + stats.raw);
 record("全过程没有抛出页面错误", errors.length === 0, errors.slice(0, 2).join(" | "));
+
+restoreUploads();
 
 const failed = results.filter((item) => !item.ok);
 console.log("\n" + (results.length - failed.length) + "/" + results.length + " 通过");

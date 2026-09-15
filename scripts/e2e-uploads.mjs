@@ -1,31 +1,26 @@
 import puppeteer from "puppeteer-core";
-import { existsSync, mkdirSync, copyFileSync, renameSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
+import { guardUploads, restoreUploads } from "./_uploads-guard.mjs";
 
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:8737/";
 const SHOT_DIR = process.env.SHOT_DIR ?? "D:/dsh工作区/_shots";
 const ROOT = "D:/dsh工作区/MangaDialogStudio";
 const LIBRARY = ROOT + "/uploads/已导入图片.json";
-const BACKUP = ROOT + "/uploads/已导入图片.json.e2e-backup";
 
 mkdirSync(SHOT_DIR, { recursive: true });
 mkdirSync(ROOT + "/uploads", { recursive: true });
 
-// 真实素材不进版本库也不该被测试污染：开跑前挪走，跑完还原
-if (existsSync(BACKUP)) {
-  rmSync(BACKUP, { force: true });
-}
-if (existsSync(LIBRARY)) {
-  copyFileSync(LIBRARY, BACKUP);
-  rmSync(LIBRARY, { force: true });
-}
-
+// 素材库的隔离统一由 _uploads-guard 负责，这里不要再自己备份一遍，
+// 两套还原叠加会互相把对方的备份搬回来
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const results = [];
 function record(name, ok, detail = "") {
   results.push({ name, ok });
   console.log((ok ? "PASS  " : "FAIL  ") + name + (detail ? "   [" + detail + "]" : ""));
 }
+
+guardUploads();
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
@@ -163,12 +158,7 @@ record("保留下来的原稿可以重新拖回画布", dropped && backOnCanvas,
 record("全过程没有抛出页面错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 
 await browser.close();
-
-// 还原真实素材
-rmSync(LIBRARY, { force: true });
-if (existsSync(BACKUP)) {
-  renameSync(BACKUP, LIBRARY);
-}
+restoreUploads();
 
 const failed = results.filter((item) => !item.ok);
 console.log("\n" + (results.length - failed.length) + "/" + results.length + " 通过");

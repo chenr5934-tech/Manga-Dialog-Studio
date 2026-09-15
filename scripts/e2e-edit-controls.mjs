@@ -1,5 +1,6 @@
 import puppeteer from "puppeteer-core";
 import { mkdirSync } from "node:fs";
+import { guardUploads, restoreUploads } from "./_uploads-guard.mjs";
 
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:8737/";
@@ -13,6 +14,8 @@ function record(name, ok, detail = "") {
   results.push({ name, ok });
   console.log((ok ? "PASS  " : "FAIL  ") + name + (detail ? "   [" + detail + "]" : ""));
 }
+
+guardUploads();
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
@@ -262,6 +265,8 @@ record("点击完成闭合可生成分镜", panelsAfter === panelsBefore + 1, "�
 record("运行期无控制台错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 
 await browser.close();
+restoreUploads();
+
 const failed = results.filter((entry) => !entry.ok);
 console.log("");
 console.log("结果: " + (results.length - failed.length) + "/" + results.length + " 通过");

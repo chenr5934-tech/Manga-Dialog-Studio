@@ -1,5 +1,6 @@
 import puppeteer from "puppeteer-core";
 import { mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { guardUploads, restoreUploads } from "./_uploads-guard.mjs";
 
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:8737/";
@@ -20,6 +21,8 @@ for (const entry of readdirSync(DL_DIR.replace(/\\/g, "/"))) {
 
 // 无头模式会拦掉程序化下载，需要真实下载行为时用 HEADFUL=1
 const headful = process.env.HEADFUL === "1";
+guardUploads();
+
 const browser = await puppeteer.launch({
   executablePath: CHROME,
   headless: !headful,
@@ -195,6 +198,7 @@ if (!zipPath) {
 }
 
 await browser.close();
+restoreUploads();
 
 if (!zipPath) {
   console.log("FAIL  未在预期时间内生成 ZIP");
