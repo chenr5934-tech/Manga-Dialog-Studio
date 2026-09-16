@@ -4,7 +4,7 @@ import { guardUploads, restoreUploads } from "./_uploads-guard.mjs";
 
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:8737/";
-const SHOT_DIR = process.env.SHOT_DIR ?? "D:/dsh工作区/_shots";
+const SHOT_DIR = process.env.SHOT_DIR ?? "_shots";
 
 mkdirSync(SHOT_DIR, { recursive: true });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -227,7 +227,7 @@ record("选中多边形分镜显示专属面板", panelSelected);
 
 const fileInput = await page.$("[data-panel-image-input]");
 if (fileInput) {
-  await fileInput.uploadFile("D:/dsh工作区/_shots/v2-01-initial.png");
+  await fileInput.uploadFile(SHOT_DIR + "/v2-01-initial.png");
   await sleep(3500);
 }
 const imageLoaded = await page.evaluate(() => document.body.innerText.includes("打开手动裁剪"));
@@ -249,9 +249,9 @@ await assetPage.close();
 
 const importInput = await page.$("[data-import-images-input]");
 await importInput.uploadFile(
-  "D:/dsh工作区/_shots/v2-01-initial.png",
-  "D:/dsh工作区/_shots/v2-06-polygon-created.png",
-  "D:/dsh工作区/_shots/test-dark.png"
+  SHOT_DIR + "/v2-01-initial.png",
+  SHOT_DIR + "/v2-06-polygon-created.png",
+  SHOT_DIR + "/test-dark.png"
 );
 await sleep(3000);
 const pendingCount = await page.evaluate(

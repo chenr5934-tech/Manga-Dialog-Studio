@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import {
+  copyFileSync,
   createReadStream,
   existsSync,
   mkdirSync,
@@ -16,7 +17,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // 预设库固定在项目目录下的 presets/，不随构建产物一起被清空
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(SCRIPT_DIR, "..");
-const MAX_BODY_BYTES = 16 * 1024 * 1024;
+// 素材库是整份 JSON 全量回写的：用户多导入几张漫画原稿就会到十几兆，
+// 上限留低了会出现"保存静默失败"，所以放宽到 64MB
+const MAX_BODY_BYTES = 64 * 1024 * 1024;
 
 // 资料库：气泡预设（单个对话框模板）、项目模板（整册版式）、
 // 自定义贴纸，以及已导入图片（原稿的常驻副本，删掉页面也不会丢）
@@ -143,6 +146,44 @@ function writeAgentConfig(next) {
   writeFileSync(AGENT_CONFIG_PATH, JSON.stringify(next, null, 2), "utf8");
 }
 
+// 界面外观配置（自定义背景壁纸）。和 agent.json 一样属于个人数据，
+// 不进版本库。壁纸存 dataURL，所以单独放一个文件。
+const UI_CONFIG_PATH = join(AGENT_CONFIG_DIR, "ui.json");
+
+const DEFAULT_UI_CONFIG = {
+  wallpaper: "",
+  wallpaperOpacity: 100,
+  wallpaperBlur: 0,
+  wallpaperDim: 45,
+  panelOpacity: 92
+};
+
+function readUiConfig() {
+  try {
+    const parsed = JSON.parse(readFileSync(UI_CONFIG_PATH, "utf8"));
+    const clamp = (value, min, max, fallback) => {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? Math.min(max, Math.max(min, Math.round(numeric))) : fallback;
+    };
+    return {
+      wallpaper: typeof parsed?.wallpaper === "string" ? parsed.wallpaper : "",
+      wallpaperOpacity: clamp(parsed?.wallpaperOpacity, 0, 100, DEFAULT_UI_CONFIG.wallpaperOpacity),
+      wallpaperBlur: clamp(parsed?.wallpaperBlur, 0, 40, DEFAULT_UI_CONFIG.wallpaperBlur),
+      wallpaperDim: clamp(parsed?.wallpaperDim, 0, 90, DEFAULT_UI_CONFIG.wallpaperDim),
+      panelOpacity: clamp(parsed?.panelOpacity, 60, 100, DEFAULT_UI_CONFIG.panelOpacity)
+    };
+  } catch {
+    return { ...DEFAULT_UI_CONFIG };
+  }
+}
+
+function writeUiConfig(next) {
+  if (!existsSync(AGENT_CONFIG_DIR)) {
+    mkdirSync(AGENT_CONFIG_DIR, { recursive: true });
+  }
+  writeFileSync(UI_CONFIG_PATH, JSON.stringify(next, null, 2), "utf8");
+}
+
 // 只回传密钥是否已配置与末位提示，避免明文到处出现
 function maskApiKey(key) {
   const raw = String(key ?? "");
@@ -180,6 +221,19 @@ function resolveLibraryPath(dir, rawName) {
   }
   const name = raw.toLowerCase().endsWith(".json") ? raw : raw + ".json";
   return { name, path: join(dir, name) };
+}
+
+// 覆盖或删除之前先把上一版存成 <文件>.bak。
+// 素材库、预设、贴纸、模板全是用户自己攒的东西，一次误覆盖就没了退路。
+function keepLibraryBackup(fullPath) {
+  if (!existsSync(fullPath)) {
+    return;
+  }
+  try {
+    copyFileSync(fullPath, fullPath + ".bak");
+  } catch {
+    // 备份失败不该挡住正常保存
+  }
 }
 
 function sendJson(response, status, payload) {
@@ -316,6 +370,7 @@ function createLibraryHandler(kind) {
     }
 
     ensureLibraryDir(dir);
+    keepLibraryBackup(target.path);
     writeFileSync(target.path, payload.content, "utf8");
     sendJson(response, 200, { ok: true, name: target.name, dir });
     return true;
@@ -327,6 +382,7 @@ function createLibraryHandler(kind) {
       sendJson(response, 404, { error: "文件不存在" });
       return true;
     }
+    keepLibraryBackup(target.path);
     unlinkSync(target.path);
     sendJson(response, 200, { ok: true });
     return true;
@@ -356,10 +412,11 @@ const handleTemplateApi = createLibraryHandler("templates");
 const handleStickerApi = createLibraryHandler("stickers");
 const handleUploadApi = createLibraryHandler("uploads");
 
-// Agent 模式：配置读写 + 对话转发。
+// Agent 模式：配置读写 + 对话转发，顺带管界面外观配置。
 // 密钥只在本地服务里使用，浏览器始终拿不到明文。
 async function handleAgentApi(request, response, pathname) {
-  if (!pathname.startsWith("/api/agent")) {
+  // 界面外观（/api/ui/*）和 agent 都在这个函数里处理，别把它挡在门外
+  if (!pathname.startsWith("/api/agent") && !pathname.startsWith("/api/ui")) {
     return false;
   }
 
@@ -372,10 +429,53 @@ async function handleAgentApi(request, response, pathname) {
       temperature: config.temperature,
       effort: config.effort,
       systemPromptExtra: config.systemPromptExtra,
+      // 本地工具：服务只监听 127.0.0.1，密钥本来就明文存在 config/agent.json。
+      // 这里把密钥一并返回供前端回填，省得每次启动都要重输一遍。
+      apiKey: config.apiKey ?? "",
       hasApiKey: Boolean(config.apiKey),
       apiKeyHint: maskApiKey(config.apiKey),
       providers: Object.entries(AGENT_PROVIDERS).map(([id, preset]) => ({ id, ...preset }))
     });
+    return true;
+  }
+
+  if (pathname === "/api/ui/config" && request.method === "GET") {
+    sendJson(response, 200, readUiConfig());
+    return true;
+  }
+
+  if (pathname === "/api/ui/config" && request.method === "POST") {
+    let payload;
+    try {
+      payload = JSON.parse(await readRequestBody(request));
+    } catch {
+      sendJson(response, 400, { error: "请求内容无法解析" });
+      return true;
+    }
+
+    const current = readUiConfig();
+    const clamp = (value, min, max, fallback) => {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? Math.min(max, Math.max(min, Math.round(numeric))) : fallback;
+    };
+
+    const next = {
+      // 传空字符串表示清掉壁纸，回到默认背景
+      wallpaper: typeof payload?.wallpaper === "string" ? payload.wallpaper : current.wallpaper,
+      wallpaperOpacity: clamp(payload?.wallpaperOpacity, 0, 100, current.wallpaperOpacity),
+      wallpaperBlur: clamp(payload?.wallpaperBlur, 0, 40, current.wallpaperBlur),
+      wallpaperDim: clamp(payload?.wallpaperDim, 0, 90, current.wallpaperDim),
+      panelOpacity: clamp(payload?.panelOpacity, 60, 100, current.panelOpacity)
+    };
+
+    try {
+      writeUiConfig(next);
+    } catch (error) {
+      sendJson(response, 500, { error: error instanceof Error ? error.message : "界面配置写入失败" });
+      return true;
+    }
+
+    sendJson(response, 200, { ok: true, ...next });
     return true;
   }
 
@@ -569,7 +669,7 @@ export function startServer({ root = "dist", port = 8737, open = true } = {}) {
       return;
     }
 
-    if (pathname.startsWith("/api/agent")) {
+    if (pathname.startsWith("/api/agent") || pathname.startsWith("/api/ui")) {
       void handleAgentApi(request, response, pathname).catch((error) => {
         sendJson(response, 500, { error: error instanceof Error ? error.message : "服务器内部错误" });
       });

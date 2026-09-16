@@ -36,6 +36,8 @@ type AgentConfig = {
   temperature: number;
   effort: string;
   systemPromptExtra: string;
+  // 回填用：本地工具直接把已保存的密钥返回来
+  apiKey?: string;
   hasApiKey: boolean;
   apiKeyHint: string;
   providers: ProviderPreset[];
@@ -123,7 +125,9 @@ export default function AgentPanel() {
         provider: payload.provider,
         baseUrl: payload.baseUrl,
         model: payload.model,
-        apiKey: "",
+        // 回填已保存的密钥：服务只监听 127.0.0.1，打开就能看到，
+        // 不必每次重输（原来"留空不修改"的设计太容易让人以为没记住）
+        apiKey: payload.apiKey ?? "",
         effort: payload.effort ?? "auto",
         // 老配置里这个字段是空的，回落到内置默认，用户不必自己找提示词
         systemPromptExtra:
@@ -158,7 +162,6 @@ export default function AgentPanel() {
         throw new Error(payload?.error ?? "保存失败");
       }
       setNotice("Agent 配置已保存");
-      setDraft((current) => ({ ...current, apiKey: "" }));
       await loadConfig();
     } catch (caught) {
       setNotice(caught instanceof Error ? caught.message : "保存失败");
@@ -169,6 +172,13 @@ export default function AgentPanel() {
     const trimmed = text.trim();
     if (!trimmed || busy) {
       return;
+    }
+
+    // 输完密钥直接发指令是常态，忘了点「保存设置」就白输一遍。
+    // 发出去之前对一次，密钥变了先落盘，下次启动自动回填。
+    const typedKey = draft.apiKey.trim();
+    if (typedKey && typedKey !== (config?.apiKey ?? "").trim()) {
+      await saveConfig();
     }
 
     setBusy(true);
@@ -430,7 +440,12 @@ export default function AgentPanel() {
 
           <label className="block space-y-1">
             <span className={labelClass}>
-              API Key{config?.hasApiKey ? `（已保存 ${config.apiKeyHint}，留空则不修改）` : ""}
+              API Key
+              {config?.hasApiKey ? (
+                <span className="ml-2 rounded bg-emerald-400/15 px-1.5 py-0.5 text-[10px] font-normal text-emerald-300">
+                  已记住，不用再输
+                </span>
+              ) : null}
             </span>
             <input
               className={fieldClass}
@@ -443,7 +458,8 @@ export default function AgentPanel() {
           </label>
 
           <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
-            密钥只保存在本机 config/agent.json，由本地服务转发请求，浏览器不会拿到明文，也不会随项目一起提交。
+            填一次点「保存设置」，之后每次启动都会自动填回来。密钥只存在本机 config/agent.json，
+            由本地服务转发请求，不会随项目提交到 git。
           </p>
 
           <div className="block space-y-1">

@@ -1,10 +1,16 @@
 import puppeteer from "puppeteer-core";
-import { existsSync, readFileSync, readdirSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:8737/";
-const PRESET_DIR = "D:/dsh工作区/MangaDialogStudio/presets";
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// 路径从脚本位置推，项目挪到哪儿都不会读空
+const PRESET_DIR = ROOT + "/presets";
+const SHOT_DIR = process.env.SHOT_DIR ?? ROOT + "/_shots";
+
+mkdirSync(SHOT_DIR, { recursive: true });
 const API = "http://127.0.0.1:8737/api/presets";
 const TEST_FILE = "e2e-测试预设库";
 
@@ -46,9 +52,11 @@ const samplePreset = {
   textColor: "#141a22"
 };
 
+// 凡是这套件自己造出来的文件都要清，包括服务端自动留的 .bak。
+// 只认 TEST_FILE 前缀会漏掉别的 e2e- 文件，把垃圾留在用户的预设库里。
 const cleanup = () => {
   for (const name of readdirSync(PRESET_DIR)) {
-    if (name.startsWith(TEST_FILE)) {
+    if (name.startsWith("e2e-")) {
       unlinkSync(join(PRESET_DIR, name));
     }
   }
@@ -179,7 +187,7 @@ record(
   readdirSync(PRESET_DIR).filter((n) => n.startsWith("e2e-")).join(", ")
 );
 
-await page.screenshot({ path: "D:/dsh工作区/_shots/preset-library.png" });
+await page.screenshot({ path: SHOT_DIR + "/preset-library.png" });
 
 const savedContent = existsSync(join(PRESET_DIR, "e2e-保存测试.json"))
   ? JSON.parse(readFileSync(join(PRESET_DIR, "e2e-保存测试.json"), "utf8"))
@@ -198,8 +206,13 @@ await page.evaluate(() => {
   button?.click();
 });
 await sleep(1500);
-const remaining = readdirSync(PRESET_DIR).filter((n) => n.startsWith("e2e-保存测试"));
+// 服务端删除前会把上一版留成 <文件>.bak，所以"目录里一个相关文件都没有"已经不成立，
+// 该消失的是正式文件本身
+const afterDelete = readdirSync(PRESET_DIR).filter((n) => n.startsWith("e2e-保存测试"));
+const remaining = afterDelete.filter((n) => n.endsWith(".json"));
+const backupLeft = afterDelete.filter((n) => n.endsWith(".bak"));
 record("删除后磁盘文件消失", remaining.length === 0, "残留=" + remaining.length);
+record("删除前自动留了一份备份", backupLeft.length > 0, "备份=" + backupLeft.join(","));
 
 // 左侧「保存预设」一键入口已按需求移除，落盘统一走编辑器的「保存并存入预设库」
 await page.keyboard.press("Escape");

@@ -1,10 +1,11 @@
 import puppeteer from "puppeteer-core";
 import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:8737/";
-const ROOT = process.env.PROJECT_ROOT ?? "D:/dsh工作区/MangaDialogStudio";
+const ROOT = process.env.PROJECT_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const STICKER_DIR = join(ROOT, "stickers");
 
 mkdirSync(STICKER_DIR, { recursive: true });
@@ -32,7 +33,7 @@ const browser = await puppeteer.launch({
 // 先落两张真实图片文件：DataTransfer 的手工注入在跨 evaluate 时会被清空，
 // uploadFile 是 puppeteer 对 file input 的标准做法，稳定得多
 // 素材写到项目目录之外，避免污染版本库
-const assetDir = process.env.SHOT_DIR ?? "D:/dsh工作区/_shots";
+const assetDir = process.env.SHOT_DIR ?? "_shots";
 mkdirSync(assetDir, { recursive: true });
 const widePng = join(assetDir, "sticker-wide.png");
 const tallPng = join(assetDir, "sticker-tall.png");

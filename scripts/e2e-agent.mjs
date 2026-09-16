@@ -1,10 +1,17 @@
 import puppeteer from "puppeteer-core";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { guardAgentConfig, restoreAgentConfig } from "./_agent-key-guard.mjs";
 
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:8737/";
-const CONFIG_PATH = "D:/dsh工作区/MangaDialogStudio/config/agent.json";
-const SHOT_DIR = "D:/dsh工作区/_shots";
+// 路径跟着脚本走。写死成绝对路径的话，项目一挪窝这些断言就全部读不到文件了
+const CONFIG_PATH = ROOT + "/config/agent.json";
+const SHOT_DIR = process.env.SHOT_DIR ?? ROOT + "/_shots";
+
+mkdirSync(SHOT_DIR, { recursive: true });
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const results = [];
@@ -13,9 +20,8 @@ function record(name, ok, detail = "") {
   console.log((ok ? "PASS  " : "FAIL  ") + name + (detail ? "   [" + detail + "]" : ""));
 }
 
-if (existsSync(CONFIG_PATH)) {
-  rmSync(CONFIG_PATH);
-}
+// 配置里有用户自己的密钥和提示词，跑测试不能直接删，先寄存起来
+guardAgentConfig();
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
@@ -509,9 +515,7 @@ record(
 record("运行期无控制台错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 
 await browser.close();
-if (existsSync(CONFIG_PATH)) {
-  rmSync(CONFIG_PATH);
-}
+restoreAgentConfig();
 
 const failed = results.filter((entry) => !entry.ok);
 console.log("");

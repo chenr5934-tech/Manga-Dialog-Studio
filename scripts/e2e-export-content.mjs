@@ -6,7 +6,7 @@ import { guardUploads, restoreUploads } from "./_uploads-guard.mjs";
 
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:8737/";
-const SHOT_DIR = process.env.SHOT_DIR ?? "D:/dsh工作区/_shots";
+const SHOT_DIR = process.env.SHOT_DIR ?? "_shots";
 const DL_DIR = process.env.TEMP ? process.env.TEMP + "\\mdl-downloads" : SHOT_DIR + "\\downloads";
 
 mkdirSync(SHOT_DIR, { recursive: true });

@@ -1,35 +1,25 @@
 // 全量 e2e 回归 runner。用法：node scripts/_run-regression.mjs
 // 结果同时打到 stdout 和 _regression.log。
-import { readdirSync, writeFileSync, appendFileSync, copyFileSync, renameSync, rmSync, existsSync } from "node:fs";
+import { readdirSync, writeFileSync, appendFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  RUNNER_STASH,
+  UPLOADS_DIR,
+  listUploadFiles,
+  restoreStashedUploads,
+  stashUploads
+} from "./_uploads-stash.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-// 好几个套件会走「导入图片」流程，而导入现在会往 uploads/ 写常驻副本。
-// 不隔离的话跑一轮回归就会往用户的素材库里灌几十张测试图。
-const UPLOADS = ROOT + "/uploads/已导入图片.json";
-const UPLOADS_BACKUP = ROOT + "/uploads/已导入图片.json.regression-backup";
-const hadUploads = existsSync(UPLOADS);
-if (hadUploads) {
-  copyFileSync(UPLOADS, UPLOADS_BACKUP);
-}
-const restoreUploads = () => {
-  // 跑完先删干净：测试期间各套件写进去的都是测试图。
-  // 结束瞬间文件可能还被浏览器句柄占着，删不掉就重试几次。
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    rmSync(UPLOADS, { force: true });
-    if (!existsSync(UPLOADS)) {
-      break;
-    }
-    // 同步小睡一下再试，避免和刚退出的浏览器进程抢文件句柄
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300);
-  }
-  rmSync(UPLOADS, { force: true });
-  if (hadUploads && existsSync(UPLOADS_BACKUP)) {
-    renameSync(UPLOADS_BACKUP, UPLOADS);
-  }
-};
+
+// 好几个套件会走「导入图片」流程，而导入会往 uploads/ 写常驻副本。
+// 不隔离的话跑一轮回归就会往用户的素材库里灌几十张测试图，
+// 所以开跑前把整个 uploads/ 寄存起来，跑完整体放回。
+const uploadsBefore = listUploadFiles(UPLOADS_DIR);
+// 用 runner 专属的寄存目录名，别和套件自己那层撞车
+stashUploads(UPLOADS_DIR, RUNNER_STASH);
 
 const files = readdirSync(ROOT + "/scripts").filter((n) => n.startsWith("e2e-") && n.endsWith(".mjs")).sort();
 let passed = 0;
@@ -38,6 +28,8 @@ writeFileSync(ROOT + "/_regression.log", "");
 for (const name of files) {
   const env = { ...process.env };
   if (name === "e2e-export.mjs") env.HEADFUL = "1";
+  // 截图一律落在项目内的 _shots/，不往工作区根目录撒
+  env.SHOT_DIR = ROOT + "/_shots";
   let out = "";
   try {
     // cwd 必须显式给：套件内部用相对路径读资源
@@ -64,12 +56,16 @@ for (const name of files) {
   appendFileSync(ROOT + "/_regression.log", "=== " + name + " : " + p + "/" + a + " ===\n" + (fails ? fails + "\n" : ""));
   console.log(name + " -> " + p + "/" + a);
 }
-restoreUploads();
-// e2e-uploads 自己的守卫会把「它开跑前那一刻」的内容还原回去，
-// 那份内容也是测试写的，所以最后再清一次
-rmSync(UPLOADS, { force: true });
-if (!hadUploads) {
-  rmSync(UPLOADS_BACKUP, { force: true });
+restoreStashedUploads(UPLOADS_DIR, RUNNER_STASH);
+
+// 跑完对一次账：寄存了多少、还原回来多少，对不上就直接吵出来，
+// 不能让素材库再悄无声息地少掉
+const uploadsAfter = listUploadFiles(UPLOADS_DIR);
+if (uploadsAfter.length !== uploadsBefore.length) {
+  console.log("!! uploads/ 还原后文件数对不上：跑前 " + uploadsBefore.length + "，跑后 " + uploadsAfter.length);
+  console.log("   跑前的文件：" + (uploadsBefore.join(", ") || "(空)"));
+  console.log("   跑后的文件：" + (uploadsAfter.join(", ") || "(空)"));
+  process.exitCode = 1;
 }
 
 appendFileSync(ROOT + "/_regression.log", "TOTAL " + passed + " passed, " + failed + " failed\n");

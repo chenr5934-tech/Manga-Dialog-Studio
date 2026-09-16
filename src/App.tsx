@@ -11,6 +11,7 @@ import TemplateLibraryModal from "./components/TemplateLibraryModal";
 import ThumbRail from "./components/ThumbRail";
 import Toolbar from "./components/Toolbar";
 import { getActivePage, useEditorStore } from "./lib/store";
+import { applyUiTheme, fetchUiTheme } from "./lib/uiTheme";
 
 export default function App() {
   const project = useEditorStore((state) => state.project);
@@ -108,6 +109,19 @@ export default function App() {
     }
     document.documentElement.dataset.theme = themeMode;
   }, [themeMode]);
+
+  // 启动就把自定义壁纸贴上，别等用户点开「更多」才加载
+  useEffect(() => {
+    let alive = true;
+    void fetchUiTheme().then((theme) => {
+      if (alive) {
+        applyUiTheme(theme);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!historyOpen) {

@@ -20,5 +20,15 @@ _regression.out
 _regression.stdout
 _regression.stderr
 
+# 验收套件与回归 runner 跑动期间的现场备份，正常结束会自己还原
+*.guard-backup
+*.regression-backup
+
 # 已导入图片的常驻副本属于个人素材，保留目录说明
 uploads/*.json
+
+# 资料库被覆盖/删除前自动留下的上一版，属于个人数据
+presets/*.bak
+templates/*.bak
+stickers/*.bak
+uploads/*.bak

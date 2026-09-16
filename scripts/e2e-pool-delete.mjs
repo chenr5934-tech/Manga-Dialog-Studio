@@ -1,11 +1,14 @@
 import puppeteer from "puppeteer-core";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { guardUploads, restoreUploads } from "./_uploads-guard.mjs";
 
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:8737/";
-const SHOT_DIR = process.env.SHOT_DIR ?? "D:/dsh工作区/_shots";
-const LIBRARY = "D:/dsh工作区/MangaDialogStudio/uploads/已导入图片.json";
+const SHOT_DIR = process.env.SHOT_DIR ?? "_shots";
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const LIBRARY = ROOT + "/uploads/已导入图片.json";
 
 mkdirSync(SHOT_DIR, { recursive: true });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

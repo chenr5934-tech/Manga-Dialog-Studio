@@ -2,6 +2,15 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { CANVAS_PRESET_LABELS, CanvasPreset } from "../types";
 import { getActivePage, useEditorStore } from "../lib/store";
 import { loadImageElement, readImageFileAsDataUrl } from "../lib/dnd";
+import {
+  DEFAULT_UI_THEME,
+  PRESET_WALLPAPERS,
+  UiTheme,
+  applyUiTheme,
+  fetchUiTheme,
+  readWallpaperFile,
+  saveUiTheme
+} from "../lib/uiTheme";
 
 const inputClass = "studio-input h-9 px-3 text-sm";
 const selectClass = "studio-select h-9 px-3 text-sm";
@@ -78,6 +87,9 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
   const [allBorderWidth, setAllBorderWidth] = useState(4);
   const [activeCategory, setActiveCategory] = useState<ToolCategory | null>(null);
   const [zipPixelRatio, setZipPixelRatio] = useState(2);
+  const [uiTheme, setUiTheme] = useState<UiTheme>(DEFAULT_UI_THEME);
+  const wallpaperInputRef = useRef<HTMLInputElement | null>(null);
+  const uiThemeSaveTimer = useRef<number | null>(null);
   const overlayInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -112,6 +124,58 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [activeCategory]);
+
+  useEffect(() => {
+    let alive = true;
+    void fetchUiTheme().then((theme) => {
+      if (!alive) {
+        return;
+      }
+      setUiTheme(theme);
+      applyUiTheme(theme);
+    });
+    return () => {
+      alive = false;
+      if (uiThemeSaveTimer.current !== null) {
+        window.clearTimeout(uiThemeSaveTimer.current);
+      }
+    };
+  }, []);
+
+  // 滑块拖动会高频触发，攒 320ms 再落盘，避免狂刷 POST
+  const commitUiTheme = (next: UiTheme, immediate = false) => {
+    setUiTheme(next);
+    applyUiTheme(next);
+    if (uiThemeSaveTimer.current !== null) {
+      window.clearTimeout(uiThemeSaveTimer.current);
+      uiThemeSaveTimer.current = null;
+    }
+    if (immediate) {
+      void saveUiTheme(next);
+      return;
+    }
+    uiThemeSaveTimer.current = window.setTimeout(() => {
+      uiThemeSaveTimer.current = null;
+      void saveUiTheme(next);
+    }, 320);
+  };
+
+  const onUiThemeChange = (patch: Partial<UiTheme>) => {
+    commitUiTheme({ ...uiTheme, ...patch });
+  };
+
+  const onPickWallpaper = async (file: File) => {
+    try {
+      const dataUrl = await readWallpaperFile(file);
+      commitUiTheme({ ...uiTheme, wallpaper: dataUrl }, true);
+    } catch {
+      // 读图失败就保持原样，让用户再选一次
+    }
+  };
+
+  const onClearWallpaper = () => {
+    commitUiTheme({ ...uiTheme, wallpaper: "" }, true);
+  };
 
   const applyCanvasSize = (event: FormEvent) => {
     event.preventDefault();
@@ -500,44 +564,179 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
             ) : null}
 
             {activeCategory === "project" ? (
-              <section className={groupClass}>
-                <p className={groupTitleClass}>项目文件</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    className={buttonClass}
-                    data-save-as="1"
-                    disabled={busy.savingProject}
-                    onClick={() => {
-                      void saveProjectAs();
+              <div className="space-y-2">
+                <section className={groupClass}>
+                  <p className={groupTitleClass}>项目文件</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      className={buttonClass}
+                      data-save-as="1"
+                      disabled={busy.savingProject}
+                      onClick={() => {
+                        void saveProjectAs();
+                      }}
+                    >
+                      {busy.savingProject ? "处理中..." : "另存为"}
+                    </button>
+                    <button
+                      className={buttonClass}
+                      data-load-project="1"
+                      disabled={busy.loadingProject}
+                      onClick={() => {
+                        void loadProject();
+                      }}
+                    >
+                      {busy.loadingProject ? "加载中..." : "加载项目"}
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      className={buttonClass}
+                      data-open-preset-library="1"
+                      onClick={() => openPresetLibrary()}
+                      title="浏览项目目录 presets/ 里已保存的整套对话框预设，可载入或删除"
+                    >
+                      预设库
+                    </button>
+                  </div>
+                  <p className="text-xs leading-5 text-[var(--text-secondary)]">
+                    另存为换个位置或名字保存整册；加载项目用于继续编辑已保存的 .openkoma.json 文件。
+                  </p>
+                </section>
+
+                <section className={groupClass} data-wallpaper-section="1">
+                  <p className={groupTitleClass}>界面背景</p>
+
+                  <input
+                    ref={wallpaperInputRef}
+                    data-wallpaper-input="1"
+                    className="hidden"
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (file) {
+                        void onPickWallpaper(file);
+                      }
                     }}
-                  >
-                    {busy.savingProject ? "处理中..." : "另存为"}
-                  </button>
-                  <button
-                    className={buttonClass}
-                    data-load-project="1"
-                    disabled={busy.loadingProject}
-                    onClick={() => {
-                      void loadProject();
-                    }}
-                  >
-                    {busy.loadingProject ? "加载中..." : "加载项目"}
-                  </button>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    className={buttonClass}
-                    data-open-preset-library="1"
-                    onClick={() => openPresetLibrary()}
-                    title="浏览项目目录 presets/ 里已保存的整套对话框预设，可载入或删除"
-                  >
-                    预设库
-                  </button>
-                </div>
-                <p className="text-xs leading-5 text-[var(--text-secondary)]">
-                  另存为换个位置或名字保存整册；加载项目用于继续编辑已保存的 .openkoma.json 文件。
-                </p>
-              </section>
+                  />
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      className={primaryButtonClass}
+                      data-wallpaper-pick="1"
+                      onClick={() => wallpaperInputRef.current?.click()}
+                    >
+                      选一张壁纸
+                    </button>
+                    <button
+                      type="button"
+                      className={buttonClass}
+                      data-wallpaper-clear="1"
+                      disabled={!uiTheme.wallpaper}
+                      onClick={() => onClearWallpaper()}
+                    >
+                      恢复默认背景
+                    </button>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="block text-[11px] text-[var(--text-secondary)]">
+                      或者直接用内置的（不用自己找图）
+                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {PRESET_WALLPAPERS.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          data-wallpaper-preset={item.id}
+                          title={item.label}
+                          aria-label={item.label}
+                          onClick={() => commitUiTheme({ ...uiTheme, wallpaper: item.id }, true)}
+                          style={{ backgroundImage: item.css }}
+                          className={
+                            "h-8 w-12 rounded-lg border transition " +
+                            (uiTheme.wallpaper === item.id
+                              ? "border-[var(--accent)] ring-1 ring-[var(--accent)]"
+                              : "border-[var(--line-soft)] hover:border-[var(--line-strong)]")
+                          }
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <label className="block space-y-1">
+                    <span className="text-[11px] text-[var(--text-secondary)]">
+                      壁纸不透明度 {uiTheme.wallpaperOpacity}%
+                    </span>
+                    <input
+                      type="range"
+                      min={10}
+                      max={100}
+                      step={1}
+                      data-wallpaper-opacity="1"
+                      value={uiTheme.wallpaperOpacity}
+                      onChange={(event) => onUiThemeChange({ wallpaperOpacity: Number(event.target.value) })}
+                      className="w-full accent-[var(--accent)]"
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="text-[11px] text-[var(--text-secondary)]">
+                      壁纸模糊 {uiTheme.wallpaperBlur}px
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={40}
+                      step={1}
+                      data-wallpaper-blur="1"
+                      value={uiTheme.wallpaperBlur}
+                      onChange={(event) => onUiThemeChange({ wallpaperBlur: Number(event.target.value) })}
+                      className="w-full accent-[var(--accent)]"
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="text-[11px] text-[var(--text-secondary)]">
+                      压暗 {uiTheme.wallpaperDim}%（调大，面板上的字更清楚）
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={90}
+                      step={1}
+                      data-wallpaper-dim="1"
+                      value={uiTheme.wallpaperDim}
+                      onChange={(event) => onUiThemeChange({ wallpaperDim: Number(event.target.value) })}
+                      className="w-full accent-[var(--accent)]"
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="text-[11px] text-[var(--text-secondary)]">
+                      面板不透明度 {uiTheme.panelOpacity}%（调小，壁纸才透得出来）
+                    </span>
+                    <input
+                      type="range"
+                      min={60}
+                      max={100}
+                      step={1}
+                      data-panel-opacity="1"
+                      value={uiTheme.panelOpacity}
+                      onChange={(event) => onUiThemeChange({ panelOpacity: Number(event.target.value) })}
+                      className="w-full accent-[var(--accent)]"
+                    />
+                  </label>
+
+                  <p className="text-xs leading-5 text-[var(--text-secondary)]">
+                    壁纸只存在你自己电脑上的 config/ui.json，不进版本库、不随项目走。想让壁纸更抢眼就把「面板不透明度」调小；
+                    觉得字看不清就把「压暗」调大。
+                  </p>
+                </section>
+              </div>
             ) : null}
           </aside>
         </>

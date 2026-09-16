@@ -4,7 +4,7 @@ import { guardUploads, restoreUploads } from "./_uploads-guard.mjs";
 
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:8737/";
-const SHOT_DIR = process.env.SHOT_DIR ?? "D:/dsh工作区/_shots";
+const SHOT_DIR = process.env.SHOT_DIR ?? "_shots";
 
 mkdirSync(SHOT_DIR, { recursive: true });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -32,7 +32,7 @@ page.on("dialog", (dialog) => {
 });
 
 // 造一张纯色原稿，颜色唯一，便于像素验证
-const assetDir = process.env.SHOT_DIR ?? "D:/dsh工作区/_shots";
+const assetDir = process.env.SHOT_DIR ?? "_shots";
 const assetPage = await browser.newPage();
 await assetPage.setViewport({ width: 500, height: 400 });
 await assetPage.setContent('<!doctype html><body style="margin:0;background:#d946ef"></body>');

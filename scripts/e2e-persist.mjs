@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:8737/";
-const TMP = "D:/dsh工作区/_shots";
+const TMP = process.env.SHOT_DIR ?? "_shots";
 
 mkdirSync(TMP, { recursive: true });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

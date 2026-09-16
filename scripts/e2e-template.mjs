@@ -1,10 +1,15 @@
 import puppeteer from "puppeteer-core";
-import { existsSync, readFileSync, readdirSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:8737/";
-const TEMPLATE_DIR = "D:/dsh工作区/MangaDialogStudio/templates";
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const TEMPLATE_DIR = ROOT + "/templates";
+const SHOT_DIR = process.env.SHOT_DIR ?? ROOT + "/_shots";
+
+mkdirSync(SHOT_DIR, { recursive: true });
 const TEST_FILE = "e2e-版式模板";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -15,7 +20,7 @@ function record(name, ok, detail = "") {
 }
 
 for (const name of readdirSync(TEMPLATE_DIR)) {
-  if (name.startsWith(TEST_FILE)) {
+  if (name.startsWith("e2e-")) {
     unlinkSync(join(TEMPLATE_DIR, name));
   }
 }
@@ -138,13 +143,13 @@ record(
   afterApply.panels === 1 && afterApply.bubbles === 1,
   "分镜=" + afterApply.panels + " 文字=" + afterApply.bubbles + " " + afterApply.notice
 );
-await page.screenshot({ path: "D:/dsh工作区/_shots/template-library.png" });
+await page.screenshot({ path: SHOT_DIR + "/template-library.png" });
 
 record("运行期无控制台错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 
 await browser.close();
 for (const name of readdirSync(TEMPLATE_DIR)) {
-  if (name.startsWith(TEST_FILE)) {
+  if (name.startsWith("e2e-")) {
     unlinkSync(join(TEMPLATE_DIR, name));
   }
 }
