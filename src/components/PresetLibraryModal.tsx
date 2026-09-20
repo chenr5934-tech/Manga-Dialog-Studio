@@ -201,7 +201,7 @@ export default function PresetLibraryModal() {
       >
         <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">预设文件ry</p>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">预设文件ry</p>
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">预设库文件夹</h3>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -218,13 +218,13 @@ export default function PresetLibraryModal() {
         </div>
 
         <div className="space-y-1 border-b border-[var(--line-soft)] px-4 py-2">
-          <p className="text-[11px] text-[var(--text-primary)]">
+          <p className="text-[12px] text-[var(--text-primary)]">
             这里存的是<strong>单个对话框（气泡）的外观模板</strong>，可跨作品反复套用。
           </p>
-          <p className="text-[11px] text-[var(--text-secondary)]">
+          <p className="text-[12px] text-[var(--text-secondary)]">
             整册漫画的排版（分镜、气泡摆位）请用顶部的「模板」按钮。
           </p>
-          <p className="truncate text-[11px] text-[var(--text-secondary)]" title={dir}>
+          <p className="truncate text-[12px] text-[var(--text-secondary)]" title={dir}>
             目录：{dir || "读取中..."}
           </p>
         </div>
@@ -250,7 +250,7 @@ export default function PresetLibraryModal() {
             >
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-xs font-semibold text-[var(--text-primary)]">{file.name}</span>
-                <span className="block text-[10px] text-[var(--text-secondary)]">
+                <span className="block text-[11px] text-[var(--text-secondary)]">
                   {file.readable ? file.count + " 个预设" : "内容无法解析"} · {formatSize(file.size)} ·{" "}
                   {formatTime(file.modified)}
                 </span>
@@ -258,7 +258,7 @@ export default function PresetLibraryModal() {
               <button
                 type="button"
                 data-preset-load={file.name}
-                className="studio-btn studio-btn-primary h-7 px-3 text-[11px] disabled:opacity-40"
+                className="studio-btn studio-btn-primary h-7 px-3 text-[12px] disabled:opacity-40"
                 disabled={busyName === file.name}
                 onClick={() => void loadFile(file.name)}
               >
@@ -266,7 +266,7 @@ export default function PresetLibraryModal() {
               </button>
               <button
                 type="button"
-                className="studio-btn studio-btn-danger h-7 px-2 text-[11px] disabled:opacity-40"
+                className="studio-btn studio-btn-danger h-7 px-2 text-[12px] disabled:opacity-40"
                 disabled={busyName === file.name}
                 onClick={() => void removeFile(file.name)}
               >
@@ -277,9 +277,9 @@ export default function PresetLibraryModal() {
         </div>
 
         <div className="border-t border-[var(--line-soft)] px-4 py-3">
-          <p className="mb-2 text-[11px] font-semibold text-[var(--text-primary)]">保存当前预设到文件夹</p>
+          <p className="mb-2 text-[12px] font-semibold text-[var(--text-primary)]">保存当前预设到文件夹</p>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] text-[var(--text-secondary)]">
+            <span className="text-[12px] text-[var(--text-secondary)]">
               {userPresetCount === 0
                 ? "还没有自定义预设，先用左侧「导入对话框图」或「编辑填字区」做一个"
                 : `会把这 ${userPresetCount} 个自定义预设写成一个文件`}

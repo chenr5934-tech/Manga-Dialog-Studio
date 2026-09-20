@@ -296,7 +296,7 @@ export default function PresetEditorModal() {
       >
         <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">预设编辑o</p>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">预设编辑o</p>
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">编辑填字区域</h3>
           </div>
           <button type="button" className="studio-btn h-7 px-3 text-xs" onClick={closePresetEditor}>
@@ -393,14 +393,14 @@ export default function PresetEditorModal() {
               />
             </div>
 
-            <p className="text-[11px] text-[var(--text-secondary)]">
+            <p className="text-[12px] text-[var(--text-secondary)]">
               在素材上拖拽框出填字区域，拖动虚线框可移动，拖右下角可缩放
             </p>
           </div>
 
           <div className="space-y-3">
             <label className="block">
-              <span className="mb-1 block text-[11px] text-[var(--text-secondary)]">预设名称</span>
+              <span className="mb-1 block text-[12px] text-[var(--text-secondary)]">预设名称</span>
               <input
                 className="studio-input h-8 w-full px-2 text-xs"
                 value={draft.name}
@@ -409,7 +409,7 @@ export default function PresetEditorModal() {
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-[11px] text-[var(--text-secondary)]">预览文字</span>
+              <span className="mb-1 block text-[12px] text-[var(--text-secondary)]">预览文字</span>
               <input
                 className="studio-input h-8 w-full px-2 text-xs"
                 value={previewText}
@@ -418,7 +418,7 @@ export default function PresetEditorModal() {
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-[11px] text-[var(--text-secondary)]">字体</span>
+              <span className="mb-1 block text-[12px] text-[var(--text-secondary)]">字体</span>
               <select
                 className="studio-select h-8 w-full px-2 text-xs"
                 value={draft.fontFamily}
@@ -434,7 +434,7 @@ export default function PresetEditorModal() {
 
             <div className="grid grid-cols-2 gap-2">
               <label className="block">
-                <span className="mb-1 block text-[11px] text-[var(--text-secondary)]">字号</span>
+                <span className="mb-1 block text-[12px] text-[var(--text-secondary)]">字号</span>
                 <input
                   type="number"
                   min={8}
@@ -448,7 +448,7 @@ export default function PresetEditorModal() {
               </label>
 
               <label className="block">
-                <span className="mb-1 block text-[11px] text-[var(--text-secondary)]">文字颜色</span>
+                <span className="mb-1 block text-[12px] text-[var(--text-secondary)]">文字颜色</span>
                 <input
                   type="color"
                   className="studio-input h-8 w-full px-1"
@@ -459,7 +459,7 @@ export default function PresetEditorModal() {
             </div>
 
             <label className="block">
-              <span className="mb-1 block text-[11px] text-[var(--text-secondary)]">排版方向</span>
+              <span className="mb-1 block text-[12px] text-[var(--text-secondary)]">排版方向</span>
               <select
                 className="studio-select h-8 w-full px-2 text-xs"
                 value={draft.direction}
@@ -473,7 +473,7 @@ export default function PresetEditorModal() {
             </label>
 
             <div className="studio-subtle space-y-2 rounded-lg p-2.5">
-              <label className="flex items-center justify-between gap-2 text-[11px] text-[var(--text-primary)]">
+              <label className="flex items-center justify-between gap-2 text-[12px] text-[var(--text-primary)]">
                 <span>文字描边</span>
                 <input
                   type="checkbox"
@@ -485,7 +485,7 @@ export default function PresetEditorModal() {
               {draft.strokeText && (
                 <div className="grid grid-cols-2 gap-2">
                   <label className="block">
-                    <span className="mb-1 block text-[10px] text-[var(--text-secondary)]">描边色</span>
+                    <span className="mb-1 block text-[11px] text-[var(--text-secondary)]">描边色</span>
                     <input
                       type="color"
                       className="studio-input h-7 w-full px-1"
@@ -494,7 +494,7 @@ export default function PresetEditorModal() {
                     />
                   </label>
                   <label className="block">
-                    <span className="mb-1 block text-[10px] text-[var(--text-secondary)]">粗细</span>
+                    <span className="mb-1 block text-[11px] text-[var(--text-secondary)]">粗细</span>
                     <input
                       type="number"
                       min={0}
@@ -511,7 +511,7 @@ export default function PresetEditorModal() {
             </div>
 
             <div className="studio-subtle space-y-2 rounded-lg p-2.5">
-              <div className="flex items-center justify-between text-[11px] text-[var(--text-primary)]">
+              <div className="flex items-center justify-between text-[12px] text-[var(--text-primary)]">
                 <span>不透明度</span>
                 <span className="text-[var(--text-secondary)]">{Math.round(previewOpacity * 100)}%</span>
               </div>
@@ -526,14 +526,14 @@ export default function PresetEditorModal() {
               />
             </div>
 
-            <div className="studio-subtle space-y-2 rounded-lg p-2.5 text-[11px] text-[var(--text-secondary)]">
+            <div className="studio-subtle space-y-2 rounded-lg p-2.5 text-[12px] text-[var(--text-secondary)]">
               <p>填字区域（相对比例）</p>
-              <p className="font-mono text-[10px] text-[var(--text-primary)]">
+              <p className="font-mono text-[11px] text-[var(--text-primary)]">
                 x {box.x.toFixed(3)} · y {box.y.toFixed(3)} · w {box.width.toFixed(3)} · h {box.height.toFixed(3)}
               </p>
               <button
                 type="button"
-                className="studio-btn h-7 w-full text-[11px]"
+                className="studio-btn h-7 w-full text-[12px]"
                 onClick={() => patchTextBox({ x: 0.15, y: 0.15, width: 0.7, height: 0.7 })}
               >
                 重置为居中区域
@@ -543,7 +543,7 @@ export default function PresetEditorModal() {
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-[var(--line-soft)] px-4 py-3">
-          <span className="text-[11px] text-[var(--text-secondary)]">
+          <span className="text-[12px] text-[var(--text-secondary)]">
             {canApplyToBubble ? "可直接应用到当前选中气泡" : "保存后会出现在左侧预设列表"}
           </span>
           <div className="flex flex-wrap justify-end gap-2">

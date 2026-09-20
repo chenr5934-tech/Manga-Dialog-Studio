@@ -141,6 +141,43 @@ body::before {
   box-sizing: border-box;
 }
 
+/* 浏览器自带的表面也属于这套设计：默认的选中蓝在一片青蓝配色里很突兀 */
+::selection {
+  background: rgba(37, 166, 217, 0.34);
+  color: var(--text-primary);
+}
+
+:root[data-theme="light"] ::selection {
+  background: rgba(15, 139, 190, 0.22);
+  color: #0b1a26;
+}
+
+/* 键盘焦点统一成品牌色描边。:where() 权重为 0，
+   不会盖掉输入框自己那套 border + 光圈方案。 */
+:where(a, button, [role="button"], [tabindex], summary, input[type="range"]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 数字用等宽字形，读页码、坐标、缩放比例时不会左右抖 */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 全站字阶整体抬一档。
+   原来 10px / 11px 撑起了大半个界面（10px×19 + 11px×24 个文本节点，14px 只有 3 个），
+   在 1720px 宽的桌面上盯着看非常累。现在：
+     标签 = 11px，次要 = 12px，正文/按钮 = 13px，输入与标题 = 14px。
+   行高同时放到 1.45，中文不至于挤成一坨。 */
+.text-xs {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.text-sm {
+  line-height: 1.5;
+}
+
 input,
 select,
 textarea,
@@ -241,6 +278,11 @@ button:disabled {
 :root[data-theme="light"] .studio-input::placeholder,
 :root[data-theme="light"] .studio-textarea::placeholder {
   color: rgba(84, 101, 125, 0.62);
+}
+
+input,
+textarea {
+  caret-color: var(--accent);
 }
 
 .studio-input:focus,
@@ -452,6 +494,10 @@ input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   background: transparent;
+  /* 视觉轨道只有 8px，但元素本身必须给足高度：
+     否则可点区域就是那条细线，鼠标稍偏一点就拖不动（实测高度确实是 8px）。 */
+  height: 24px;
+  cursor: pointer;
 }
 
 input[type="range"]::-webkit-slider-runnable-track {
@@ -466,7 +512,8 @@ input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   width: 20px;
   height: 20px;
-  margin-top: -7px;
+  /* 24px 高的元素里轨道居中(顶在 8px)，滑块再居中到元素中间，所以是 -6 不是 -7 */
+  margin-top: -6px;
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid rgba(255, 255, 255, 0.9);

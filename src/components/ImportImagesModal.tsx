@@ -3,8 +3,9 @@ import { PageImportItem } from "../types";
 import { IMAGE_FILE_ACCEPT, loadImageElement, readImageFileAsDataUrl } from "../lib/dnd";
 import { makeUploadedImage } from "../lib/uploads";
 import { useEditorStore } from "../lib/store";
+import { IconArrowDown, IconArrowUp, IconClose } from "./icons";
 
-const actionButtonClass = "studio-btn h-7 px-2 text-[11px] disabled:cursor-not-allowed disabled:opacity-40";
+const actionButtonClass = "studio-btn h-7 px-2 text-[12px] disabled:cursor-not-allowed disabled:opacity-40";
 const cardButtonClass = "studio-btn flex h-10 w-10 shrink-0 items-center justify-center text-sm leading-none";
 
 export default function ImportImagesModal() {
@@ -148,7 +149,7 @@ export default function ImportImagesModal() {
       >
         <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">导入原稿</p>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">导入原稿</p>
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">导入漫画原稿</h3>
           </div>
           <button type="button" className="studio-btn h-7 px-3 text-xs" onClick={closeImportDialog}>
@@ -197,7 +198,7 @@ export default function ImportImagesModal() {
                 按文件名排序
               </button>
             </div>
-            <p className="text-[11px] text-[var(--text-secondary)]">
+            <p className="text-[12px] text-[var(--text-secondary)]">
               每张图片成为一个页面，画布尺寸与图片一致，顺序即漫画顺序
             </p>
           </div>
@@ -205,7 +206,7 @@ export default function ImportImagesModal() {
           {items.length > 0 && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between px-1">
-                <span className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">
+                <span className="text-[12px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">
                   待导入 {items.length} 张
                 </span>
                 <button type="button" className={actionButtonClass} onClick={() => setItems([])}>
@@ -247,7 +248,7 @@ export default function ImportImagesModal() {
                       : "border-[var(--line-soft)] bg-[var(--panel-1)]"
                   }`}
                 >
-                  <span className="studio-chip w-7 shrink-0 text-center text-[11px] font-semibold">{index + 1}</span>
+                  <span className="studio-chip w-7 shrink-0 text-center text-[12px] font-semibold">{index + 1}</span>
                   <img
                     src={item.dataUrl}
                     alt={item.name}
@@ -255,10 +256,10 @@ export default function ImportImagesModal() {
                     className="h-12 w-12 shrink-0 rounded border border-[var(--line-soft)] object-cover"
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[11px] font-semibold text-[var(--text-primary)]">
+                    <span className="block truncate text-[12px] font-semibold text-[var(--text-primary)]">
                       {item.name}
                     </span>
-                    <span className="block text-[10px] text-[var(--text-secondary)]">
+                    <span className="block text-[11px] text-[var(--text-secondary)]">
                       {item.width} × {item.height}
                     </span>
                   </span>
@@ -268,8 +269,9 @@ export default function ImportImagesModal() {
                     onClick={() => moveItem(index, -1)}
                     disabled={index === 0}
                     title="上移"
+                    aria-label="上移这一张"
                   >
-                    ▲
+                    <IconArrowUp size={15} />
                   </button>
                   <button
                     type="button"
@@ -277,16 +279,18 @@ export default function ImportImagesModal() {
                     onClick={() => moveItem(index, 1)}
                     disabled={index === items.length - 1}
                     title="下移"
+                    aria-label="下移这一张"
                   >
-                    ▼
+                    <IconArrowDown size={15} />
                   </button>
                   <button
                     type="button"
                     className={`${cardButtonClass} studio-btn-danger`}
                     onClick={() => removeItem(index)}
                     title="移除"
+                    aria-label="从待导入列表里移除这一张"
                   >
-                    ✕
+                    <IconClose size={15} />
                   </button>
                 </div>
               ))}
@@ -296,13 +300,13 @@ export default function ImportImagesModal() {
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line-soft)] px-4 py-3">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="text-[11px] leading-4 text-[var(--text-secondary)]">
+            <span className="text-[12px] leading-4 text-[var(--text-secondary)]">
               导入只进「已导入图片」素材库，不生成胶片页。想让它变成一页，把它拖到右侧胶片栏上。
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-[var(--text-secondary)]">
+            <span className="text-[12px] text-[var(--text-secondary)]">
               {busy ? "正在读取图片..." : items.length > 0 ? `共 ${items.length} 张` : "尚未选择图片"}
             </span>
             <button

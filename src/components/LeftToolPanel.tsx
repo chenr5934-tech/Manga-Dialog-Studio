@@ -16,6 +16,7 @@ import FillCanvasModal from "./FillCanvasModal";
 import { normalizePreset } from "../lib/presets";
 import { getActivePage, useEditorStore } from "../lib/store";
 import { StickerDef, listStickerGroups, normalizeCustomStickers } from "../lib/stickers";
+import { IconCheck, IconClose } from "./icons";
 
 type ContentMode = "presets" | "stickers" | "images" | "export";
 
@@ -28,8 +29,8 @@ type LeftToolPanelProps = {
 
 type LibraryFile = { name: string; count: number; detail: string; modified: number };
 
-const groupTitleClass = "px-0.5 text-[10px] uppercase tracking-[0.16em] text-[var(--text-secondary)]";
-const toolButtonClass = "studio-btn h-8 px-2 text-[11px]";
+const groupTitleClass = "px-0.5 text-[11px] uppercase tracking-[0.16em] text-[var(--text-secondary)]";
+const toolButtonClass = "studio-btn h-8 px-2 text-[12px]";
 const gridTwoClass = "grid grid-cols-2 gap-1.5";
 const gridThreeClass = "grid grid-cols-3 gap-1.5";
 const presetCardClass =
@@ -391,8 +392,8 @@ export default function LeftToolPanel({
         <PresetThumb preset={preset} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[11px] font-semibold text-[var(--text-primary)]">{preset.name}</span>
-        <span className="block text-[10px] text-[var(--text-secondary)]">
+        <span className="block truncate text-[12px] font-semibold text-[var(--text-primary)]">{preset.name}</span>
+        <span className="block text-[11px] text-[var(--text-secondary)]">
           {preset.width}×{preset.height}
           {preset.builtin ? "" : " · 自定义"}
         </span>
@@ -408,9 +409,10 @@ export default function LeftToolPanel({
               deleteBubblePreset(preset.id);
             }
           }}
-          className="studio-btn h-6 w-6 shrink-0 text-[11px] opacity-0 transition group-hover:opacity-100"
+          className="studio-btn flex h-7 w-7 shrink-0 items-center justify-center opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100"
+          aria-label={"删除预设 " + preset.name}
         >
-          ✕
+          <IconClose size={13} />
         </button>
       )}
     </div>
@@ -424,7 +426,7 @@ export default function LeftToolPanel({
   return (
     <aside className="studio-surface flex h-full min-h-0 flex-col overflow-hidden">
       <div className="space-y-2.5 border-b border-[var(--line-soft)] px-2.5 py-2.5">
-        <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">工具箱</p>
+        <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">工具箱</p>
 
         <div className="space-y-1.5">
           <p className={groupTitleClass}>扣选</p>
@@ -468,7 +470,7 @@ export default function LeftToolPanel({
             </button>
           </div>
           <label className={toolButtonClass + " flex w-full cursor-pointer items-center justify-between"}>
-            <span className="text-[11px]">底图色</span>
+            <span className="text-[12px]">底图色</span>
             <input
               type="color"
               data-tool-backdrop="1"
@@ -561,7 +563,7 @@ export default function LeftToolPanel({
       <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-2.5" data-tool-content={contentMode}>
         {contentMode === "presets" ? (
           <div className="space-y-3">
-            <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
+            <p className="text-[11px] leading-4 text-[var(--text-secondary)]">
               <span className="text-[var(--text-primary)]">单击</span>加到画布中央，或
               <span className="text-[var(--text-primary)]">拖到画布</span>指定位置
             </p>
@@ -616,12 +618,12 @@ export default function LeftToolPanel({
             {libraryOpen ? (
               <div className="max-h-[120px] space-y-1 overflow-y-auto rounded-xl border border-[var(--line-soft)] p-2">
                 {libraryFiles.length === 0 ? (
-                  <p className="px-1 text-[11px] text-[var(--text-secondary)]">贴纸库还是空的</p>
+                  <p className="px-1 text-[12px] text-[var(--text-secondary)]">贴纸库还是空的</p>
                 ) : (
                   libraryFiles.map((file) => (
                     <div key={file.name} className="flex items-center justify-between gap-2 px-1">
-                      <span className="min-w-0 flex-1 truncate text-[11px]" title={file.name}>{file.name}</span>
-                      <button type="button" data-sticker-library-load={file.name} className="studio-btn h-6 shrink-0 px-2 text-[10px]" onClick={() => void loadStickerLibraryFile(file.name)}>
+                      <span className="min-w-0 flex-1 truncate text-[12px]" title={file.name}>{file.name}</span>
+                      <button type="button" data-sticker-library-load={file.name} className="studio-btn h-6 shrink-0 px-2 text-[11px]" onClick={() => void loadStickerLibraryFile(file.name)}>
                         载入
                       </button>
                     </div>
@@ -658,10 +660,11 @@ export default function LeftToolPanel({
                         type="button"
                         data-sticker-remove={item.id}
                         title="删除这张贴纸"
-                        className="absolute right-0.5 top-0.5 hidden h-4 w-4 items-center justify-center rounded-full bg-[var(--panel-1)] text-[10px] text-[var(--text-secondary)] group-hover:flex hover:text-red-500"
+                        aria-label={"删除贴纸 " + item.name}
+                        className="studio-btn absolute right-0.5 top-0.5 hidden h-6 w-6 items-center justify-center rounded-full p-0 group-hover:flex hover:text-red-400"
                         onClick={() => removeCustomSticker(item.id)}
                       >
-                        ×
+                        <IconClose size={12} />
                       </button>
                     </div>
                   ))
@@ -687,12 +690,12 @@ export default function LeftToolPanel({
                   ))}
             </div>
 
-            <p className="text-[10px] text-[var(--text-secondary)]" data-sticker-count="1">
+            <p className="text-[11px] text-[var(--text-secondary)]" data-sticker-count="1">
               单击即加到画布中央，可连续添加 · 已添加 {stickerAdded}
             </p>
 
             {activeStickerGroup === customGroupName && customStickers.length === 0 ? (
-              <p className="py-4 text-center text-[11px] leading-5 text-[var(--text-secondary)]">
+              <p className="py-4 text-center text-[12px] leading-5 text-[var(--text-secondary)]">
                 还没有自定义贴纸。
                 <br />
                 点下面的「导入自定义贴纸」试试，透明底 PNG 效果最好。
@@ -703,7 +706,7 @@ export default function LeftToolPanel({
 
         {contentMode === "images" ? (
           <div className="space-y-2.5" data-image-pool="1">
-            <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
+            <p className="text-[11px] leading-4 text-[var(--text-secondary)]">
               拖到<span className="text-[var(--text-primary)]">分镜</span>上会问你是否放进该格子；
               拖到<span className="text-[var(--text-primary)]">空白处</span>则在上层新建一张图片，可以自由调大小。
               鼠标移到缩略图上还能抠图、铺满或移除。
@@ -766,7 +769,7 @@ export default function LeftToolPanel({
             </div>
 
             {pooledImages.length === 0 ? (
-              <p className="py-4 text-center text-[11px] leading-5 text-[var(--text-secondary)]">
+              <p className="py-4 text-center text-[12px] leading-5 text-[var(--text-secondary)]">
                 还没有图片。
                 <br />
                 导入漫画原稿、或给分镜放进图片之后，它们会出现在这里。
@@ -806,13 +809,13 @@ export default function LeftToolPanel({
                       <span
                         data-pooled-image-check={item.id}
                         className={
-                          "absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded border text-[11px] leading-none " +
+                          "absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded border text-[12px] leading-none " +
                           (poolSelected.includes(item.id)
                             ? "border-cyan-300 bg-cyan-400 text-black"
                             : "border-white/70 bg-black/50 text-transparent")
                         }
                       >
-                        ✓
+                        <IconCheck size={12} />
                       </span>
                     ) : null}
 
@@ -820,7 +823,7 @@ export default function LeftToolPanel({
                       <button
                         type="button"
                         data-pooled-image-bg={item.id}
-                        className="studio-btn h-6 flex-1 px-1 text-[10px] leading-none"
+                        className="studio-btn h-6 flex-1 px-1 text-[11px] leading-none"
                         title="一键去掉与背景色接近的像素，抠成透明图后放到画布上"
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
@@ -833,7 +836,7 @@ export default function LeftToolPanel({
                       <button
                         type="button"
                         data-pooled-image-tile={item.id}
-                        className="studio-btn h-6 flex-1 px-1 text-[10px] leading-none"
+                        className="studio-btn h-6 flex-1 px-1 text-[11px] leading-none"
                         title="把这张图铺满整张画布，可选拉伸或等比"
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
@@ -846,7 +849,7 @@ export default function LeftToolPanel({
                       <button
                         type="button"
                         data-pooled-image-remove={item.id}
-                        className="studio-btn h-6 flex-1 px-1 text-[10px] leading-none"
+                        className="studio-btn h-6 flex-1 px-1 text-[11px] leading-none"
                         title="从列表移除，不影响画面，可用「恢复已移除」找回"
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
@@ -892,7 +895,7 @@ export default function LeftToolPanel({
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] leading-4 text-[var(--text-secondary)]">每页一张 PNG，按 001、002 序号命名</p>
+              <p className="text-[11px] leading-4 text-[var(--text-secondary)]">每页一张 PNG，按 001、002 序号命名</p>
             </div>
 
             <div className="space-y-1.5 border-t border-[var(--line-soft)] pt-3">
@@ -906,7 +909,7 @@ export default function LeftToolPanel({
               >
                 导出未完成作品
               </button>
-              <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
+              <p className="text-[11px] leading-4 text-[var(--text-secondary)]">
                 保存目前所有改动（含图片与编辑历史）成一个文件，方便下次接着编辑。
               </p>
             </div>
@@ -966,13 +969,13 @@ export default function LeftToolPanel({
         ) : null}
 
         {contentMode === "export" ? (
-          <p className="px-0.5 text-[10px] leading-4 text-[var(--text-secondary)]">
+          <p className="px-0.5 text-[11px] leading-4 text-[var(--text-secondary)]">
             导出会把当前选中状态与辅助线一并排除，只输出画面内容。
           </p>
         ) : null}
 
         {contentMode === "images" ? (
-          <p className="px-0.5 text-[10px] leading-4 text-[var(--text-secondary)]">
+          <p className="px-0.5 text-[11px] leading-4 text-[var(--text-secondary)]">
             图片池收录项目里用过的每一张图，自动去重。拖拽即可复用，不需要重新导入。
           </p>
         ) : null}

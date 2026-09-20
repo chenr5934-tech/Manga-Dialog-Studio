@@ -153,7 +153,10 @@ export default function App() {
       <main className="mx-auto flex h-[calc(100vh-28px)] max-w-[1920px] min-w-0 flex-col gap-3 text-[var(--text-primary)]">
         <Toolbar onExportPng={exportPng} onExportPdf={exportPdf} onExportZip={exportZip} />
 
-        <section className="grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[260px_minmax(640px,1fr)_336px_124px]">
+        {/* 四栏的固定宽度合计必须留得下画布：原来是 260+640+336+124+12*3=1396，
+            而断点在 1280，于是 1280–1400 这段宽度必出横向滚动条（1280 屏最常见）。
+            现在去掉画布的 640 硬下限、固定栏各收窄一档，1280 起就能装下。 */}
+        <section className="grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[248px_minmax(0,1fr)_308px_116px]">
           <div className="min-h-0">
             <LeftToolPanel
               onExportPng={exportPng}
@@ -182,10 +185,14 @@ export default function App() {
           </div>
         </section>
 
-        <footer className="studio-surface grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-2.5 text-xs text-[var(--text-secondary)]">
+        {/* 两侧必须是 minmax(0,1fr)：写成 1fr 时下限是 min-content，
+            字号一大两侧 chip 就把中间那条通知框挤出去，整页横向溢出十几个像素 */}
+        <footer className="studio-surface grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-4 py-2.5 text-xs text-[var(--text-secondary)]">
           <div className="flex min-w-0 flex-wrap items-center gap-2 justify-self-start">
-            <span className="studio-chip px-2.5 py-1">Page {activePageNumber} / {project.pages.length}</span>
-            <span className="studio-chip px-2.5 py-1">
+            <span className="studio-chip tnum px-2.5 py-1">
+              Page {activePageNumber} / {project.pages.length}
+            </span>
+            <span className="studio-chip tnum px-2.5 py-1">
               Canvas {activePage.canvas.width} x {activePage.canvas.height}
             </span>
           </div>
@@ -194,7 +201,7 @@ export default function App() {
             <div className="relative">
               {historyOpen ? (
                 <div className="studio-surface absolute bottom-full left-0 right-0 z-30 mb-2 max-h-56 overflow-auto p-2">
-                  <div className="mb-1 px-1 text-[11px] uppercase tracking-[0.14em] text-[var(--text-secondary)]">消息历史</div>
+                  <div className="mb-1 px-1 text-[12px] uppercase tracking-[0.14em] text-[var(--text-secondary)]">消息历史</div>
                   {noticeHistory.length === 0 ? (
                     <p className="px-1 py-1 text-xs text-[var(--text-secondary)]">暂无消息</p>
                   ) : (
@@ -202,7 +209,7 @@ export default function App() {
                       {noticeHistory.map((entry) => (
                         <li key={entry.id} className="studio-subtle rounded-lg px-2 py-1.5 text-left">
                           <p className="text-xs text-[var(--text-primary)]">{entry.text}</p>
-                          <p className="mt-0.5 text-[10px] text-[var(--text-secondary)]">{entry.time}</p>
+                          <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">{entry.time}</p>
                         </li>
                       ))}
                     </ul>
@@ -217,14 +224,14 @@ export default function App() {
                 title={notice ?? "暂无消息"}
               >
                 <span className="truncate text-xs text-[var(--text-primary)]">{notice ?? "准备就绪"}</span>
-                <span className="text-[10px] text-[var(--text-secondary)]">{historyOpen ? "收起" : "历史"}</span>
+                <span className="text-[11px] text-[var(--text-secondary)]">{historyOpen ? "收起" : "历史"}</span>
               </button>
             </div>
           </div>
 
           <div className="flex min-w-0 flex-wrap items-center gap-2 justify-self-end">
-            <span className="studio-chip px-2.5 py-1">分镜 {activePage.panels.length}</span>
-            <span className="studio-chip px-2.5 py-1">文字 {activePage.bubbles.length}</span>
+            <span className="studio-chip tnum px-2.5 py-1">分镜 {activePage.panels.length}</span>
+            <span className="studio-chip tnum px-2.5 py-1">文字 {activePage.bubbles.length}</span>
           </div>
         </footer>
       </main>

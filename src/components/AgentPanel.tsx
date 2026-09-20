@@ -61,7 +61,7 @@ const QUICK_TASKS = [
   "加一个旁白框写「三年后的夏天」"
 ];
 
-const labelClass = "text-[11px] text-[var(--text-secondary)]";
+const labelClass = "text-[12px] text-[var(--text-secondary)]";
 const fieldClass = "studio-input h-8 w-full px-2 text-xs";
 
 export default function AgentPanel() {
@@ -326,13 +326,13 @@ export default function AgentPanel() {
     >
       <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-3 py-2.5">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">智能排版</p>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">智能排版</p>
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">自动排版</h3>
         </div>
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            className={`studio-btn h-7 px-2 text-[11px] ${configOpen ? "studio-btn-primary" : ""}`}
+            className={`studio-btn h-7 px-2 text-[12px] ${configOpen ? "studio-btn-primary" : ""}`}
             data-agent-config-toggle="1"
             onClick={() => setConfigOpen((open) => !open)}
           >
@@ -341,7 +341,7 @@ export default function AgentPanel() {
           <button
             type="button"
             data-agent-scope="1"
-            className={`studio-btn h-7 px-2 text-[11px] ${
+            className={`studio-btn h-7 px-2 text-[12px] ${
               agentScopePicking ? "studio-btn-primary" : ""
             }`}
             title="在画布上框出一块区域，Agent 之后只会在该区域内新增内容"
@@ -351,7 +351,7 @@ export default function AgentPanel() {
           </button>
           <button
             type="button"
-            className="studio-btn h-7 px-2 text-[11px]"
+            className="studio-btn h-7 px-2 text-[12px]"
             onClick={() => setSidePanel("inspector")}
           >
             属性
@@ -422,7 +422,7 @@ export default function AgentPanel() {
                   type="button"
                   data-agent-effort={option.value}
                   title={option.hint}
-                  className={`studio-btn h-7 flex-1 rounded-none border-0 px-1 text-[11px] ${
+                  className={`studio-btn h-7 flex-1 rounded-none border-0 px-1 text-[12px] ${
                     draft.effort === option.value ? "studio-btn-primary" : ""
                   }`}
                   onClick={() => setDraft((current) => ({ ...current, effort: option.value }))}
@@ -431,7 +431,7 @@ export default function AgentPanel() {
                 </button>
               ))}
             </div>
-            <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
+            <p className="text-[11px] leading-4 text-[var(--text-secondary)]">
               {currentProvider?.effortParam
                 ? `将映射为 ${currentProvider.effortParam} 参数；不同厂商支持的档位不同，不支持的会沿用默认`
                 : "该接口不支持档位参数，这一项会被忽略"}
@@ -442,7 +442,7 @@ export default function AgentPanel() {
             <span className={labelClass}>
               API Key
               {config?.hasApiKey ? (
-                <span className="ml-2 rounded bg-emerald-400/15 px-1.5 py-0.5 text-[10px] font-normal text-emerald-300">
+                <span className="ml-2 rounded bg-emerald-400/15 px-1.5 py-0.5 text-[11px] font-normal text-emerald-300">
                   已记住，不用再输
                 </span>
               ) : null}
@@ -457,7 +457,7 @@ export default function AgentPanel() {
             />
           </label>
 
-          <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
+          <p className="text-[11px] leading-4 text-[var(--text-secondary)]">
             填一次点「保存设置」，之后每次启动都会自动填回来。密钥只存在本机 config/agent.json，
             由本地服务转发请求，不会随项目提交到 git。
           </p>
@@ -468,7 +468,7 @@ export default function AgentPanel() {
               <button
                 type="button"
                 data-reset-prompt="1"
-                className="studio-btn h-6 shrink-0 px-2 text-[10px]"
+                className="studio-btn h-6 shrink-0 px-2 text-[11px]"
                 onClick={() =>
                   setDraft((current) => ({ ...current, systemPromptExtra: DEFAULT_AGENT_PROMPT }))
                 }
@@ -488,7 +488,7 @@ export default function AgentPanel() {
                 setDraft((current) => ({ ...current, systemPromptExtra: event.target.value }))
               }
             />
-            <span className="block text-[10px] leading-4 text-[var(--text-secondary)]">
+            <span className="block text-[11px] leading-4 text-[var(--text-secondary)]">
               内置提示词负责让模型输出正确的操作格式，这段附加要求会加在它后面并优先遵循。
             </span>
           </div>
@@ -502,7 +502,7 @@ export default function AgentPanel() {
       {agentScope ? (
         <div
           data-agent-scope-info="1"
-          className="flex flex-wrap items-center gap-2 border-b border-amber-400/50 bg-amber-500/10 px-3 py-2 text-[11px]"
+          className="flex flex-wrap items-center gap-2 border-b border-amber-400/50 bg-amber-500/10 px-3 py-2 text-[12px]"
         >
           <span className="text-[var(--text-primary)]">
             作用范围：{Math.round(agentScope.width)} × {Math.round(agentScope.height)} @ (
@@ -512,7 +512,7 @@ export default function AgentPanel() {
           <button
             type="button"
             data-agent-scope-clear="1"
-            className="studio-btn ml-auto h-6 px-2 text-[10px]"
+            className="studio-btn ml-auto h-6 px-2 text-[11px]"
             onClick={() => setAgentScope(null)}
           >
             取消限制
@@ -536,7 +536,7 @@ export default function AgentPanel() {
                 <button
                   key={task}
                   type="button"
-                  className="studio-btn h-auto w-full px-2 py-1.5 text-left text-[11px] leading-4"
+                  className="studio-btn h-auto w-full px-2 py-1.5 text-left text-[12px] leading-4"
                   onClick={() => void run(task)}
                 >
                   {task}
@@ -560,13 +560,13 @@ export default function AgentPanel() {
           >
             <p className="leading-5 text-[var(--text-primary)]">
               {entry.hasImage ? (
-                <span className="mr-1 rounded bg-[var(--accent)] px-1 text-[10px] text-white">图</span>
+                <span className="mr-1 rounded bg-[var(--accent)] px-1 text-[11px] text-white">图</span>
               ) : null}
               {entry.text}
             </p>
 
             {entry.skills && entry.skills.length > 0 ? (
-              <p className="mt-1 text-[10px] leading-4 text-[var(--text-secondary)]">
+              <p className="mt-1 text-[11px] leading-4 text-[var(--text-secondary)]">
                 已启用技能：{entry.skills.join(" · ")}
               </p>
             ) : null}
@@ -574,7 +574,7 @@ export default function AgentPanel() {
             {entry.applied && entry.applied.length > 0 ? (
               <ul className="mt-1 space-y-0.5">
                 {entry.applied.map((item, index) => (
-                  <li key={index} className="text-[11px] leading-4 text-[var(--text-secondary)]">
+                  <li key={index} className="text-[12px] leading-4 text-[var(--text-secondary)]">
                     · {item}
                   </li>
                 ))}
@@ -584,7 +584,7 @@ export default function AgentPanel() {
             {entry.actionErrors && entry.actionErrors.length > 0 ? (
               <ul className="mt-1 space-y-0.5">
                 {entry.actionErrors.map((item, index) => (
-                  <li key={index} className="text-[11px] leading-4 text-red-500">
+                  <li key={index} className="text-[12px] leading-4 text-red-500">
                     · {item}
                   </li>
                 ))}
@@ -604,20 +604,20 @@ export default function AgentPanel() {
             alt="参考图"
             className="h-12 w-12 shrink-0 rounded border border-[var(--line-soft)] object-cover"
           />
-          <span className="min-w-0 flex-1 text-[11px] leading-4 text-[var(--text-secondary)]">
+          <span className="min-w-0 flex-1 text-[12px] leading-4 text-[var(--text-secondary)]">
             参考图已就绪。写一句要求（例如「照着这张图复刻排版」）再发送，视觉模型会读出分镜结构。
           </span>
           <button
             type="button"
             data-agent-reference-clear="1"
-            className="studio-btn h-6 shrink-0 px-2 text-[10px]"
+            className="studio-btn h-6 shrink-0 px-2 text-[11px]"
             onClick={() => setReference(null)}
           >
             移除
           </button>
         </div>
       ) : (
-        <p className="border-t border-[var(--line-soft)] px-3 py-1.5 text-[10px] text-[var(--text-secondary)]">
+        <p className="border-t border-[var(--line-soft)] px-3 py-1.5 text-[11px] text-[var(--text-secondary)]">
           可以把参考漫画图拖到这里，或直接 Ctrl+V 粘贴截图
         </p>
       )}
@@ -642,13 +642,13 @@ export default function AgentPanel() {
           }}
         />
         <div className="mt-1.5 flex items-center gap-2">
-          <span className="text-[10px] text-[var(--text-secondary)]">
+          <span className="text-[11px] text-[var(--text-secondary)]">
             {busy ? "助手正在思考..." : "Enter 发送，Shift+Enter 换行"}
           </span>
           <button
             type="button"
             data-agent-send="1"
-            className="studio-btn studio-btn-primary ml-auto h-7 px-3 text-[11px] disabled:cursor-not-allowed disabled:opacity-40"
+            className="studio-btn studio-btn-primary ml-auto h-7 px-3 text-[12px] disabled:cursor-not-allowed disabled:opacity-40"
             disabled={busy || !instruction.trim()}
             onClick={() => void run(instruction)}
           >

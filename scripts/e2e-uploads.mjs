@@ -116,11 +116,10 @@ const footerBefore = await readFooter();
 const pagesBefore = Number((footerBefore.match(/Page\s*(\d+)/) ?? [0, 0])[1]);
 record("导入后确实生成了页面", pagesBefore >= 1, footerBefore.slice(0, 60));
 
-// 胶片栏的删除按钮文案是 ✕
+// 按语义定位，别依赖按钮上的符号或文案：图标换成 SVG 之后，
+// 靠 innerText 找按钮的写法当场就失效了
 const removed = await page.evaluate(() => {
-  const button = Array.from(document.querySelectorAll("button")).find((item) =>
-    (item.innerText ?? "").trim() === "✕"
-  );
+  const button = document.querySelector('[data-thumb-rail] button[aria-label="删除该页"]');
   if (!button || button.disabled) {
     return false;
   }

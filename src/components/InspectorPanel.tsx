@@ -41,7 +41,7 @@ const containerClass =
   "studio-surface h-full overflow-auto p-4 text-[var(--text-primary)]";
 const sectionClass = "studio-subtle space-y-3 rounded-2xl p-3.5";
 const fieldClass = "flex items-center justify-between gap-3";
-const labelClass = "text-[11px] uppercase tracking-[0.15em] text-[var(--text-secondary)]";
+const labelClass = "text-[12px] uppercase tracking-[0.15em] text-[var(--text-secondary)]";
 const inputClass = "studio-input h-9 w-full px-3 text-sm";
 const selectClass = "studio-select h-9 w-full px-3 text-sm";
 const textareaClass = "studio-textarea w-full px-3 py-2 text-sm";
@@ -391,7 +391,7 @@ function SizeSliderField({
             data-bubble-size-input={label}
             onChange={(event) => onChange(normalizeBubbleSize(Number(event.target.value)))}
           />
-          <span className="text-[10px] text-[var(--text-secondary)]">px</span>
+          <span className="text-[11px] text-[var(--text-secondary)]">px</span>
         </div>
       </div>
 
@@ -407,7 +407,7 @@ function SizeSliderField({
         className="w-full accent-[var(--accent)]"
       />
 
-      <div className="flex justify-between text-[10px] text-[var(--text-secondary)]">
+      <div className="flex justify-between text-[11px] text-[var(--text-secondary)]">
         <span>{BUBBLE_SIZE_MIN}</span>
         <span>
           {exceedsSlider
@@ -721,7 +721,7 @@ function VisualCropModal({ panel, open, onClose }: { panel: Panel; open: boolean
       <div className="studio-surface relative w-full max-w-6xl p-4 md:p-5" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">裁剪编辑</p>
+            <p className="text-[12px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">裁剪编辑</p>
             <h4 className="text-base font-semibold text-[var(--text-primary)]">图像手动裁剪</h4>
           </div>
           <button className={buttonClass} onClick={onClose}>
@@ -936,7 +936,7 @@ function PanelInspector({ panel }: { panel: Panel }) {
       <div className={sectionClass}>
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">分镜属性</h3>
-          <span className="studio-chip px-2.5 py-1 text-[11px]">分镜</span>
+          <span className="studio-chip px-2.5 py-1 text-[12px]">分镜</span>
         </div>
         <NumberField label="X 坐标" value={panel.x} onChange={patch("x") as (v: number) => void} />
         <NumberField label="Y 坐标" value={panel.y} onChange={patch("y") as (v: number) => void} />
@@ -1001,13 +1001,13 @@ function PanelInspector({ panel }: { panel: Panel }) {
               倒角
             </button>
           </div>
-          <p className="text-[11px] leading-4 text-[var(--text-secondary)]">
+          <p className="text-[12px] leading-4 text-[var(--text-secondary)]">
             半径会被相邻边长限制：顶点越密、边越短，实际能用上的圆角/倒角就越小。
             另外填充色和页面底色相同时，只看得到边框的角在变，给分镜放张图或换个底图色会更清楚。
           </p>
         </div>
         <NumberField label="内边距" value={panel.gap} min={0} onChange={patch("gap") as (v: number) => void} />
-        <p className="text-[11px] leading-4 text-[var(--text-secondary)]">
+        <p className="text-[12px] leading-4 text-[var(--text-secondary)]">
           内边距：边框与画面内容之间留出的空隙，会露出页面底色。注意它和「切割画布」里分镜之间的间距不是一回事。
         </p>
 
@@ -1054,7 +1054,7 @@ function PanelInspector({ panel }: { panel: Panel }) {
         <div className={sectionClass}>
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">多边形分镜</h3>
-            <span className="studio-chip px-2.5 py-1 text-[11px]">多边形</span>
+            <span className="studio-chip px-2.5 py-1 text-[12px]">多边形</span>
           </div>
 
           <p className="text-xs text-[var(--text-secondary)]">
@@ -1068,7 +1068,7 @@ function PanelInspector({ panel }: { panel: Panel }) {
       <div className={sectionClass}>
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">斜切</h3>
-          <span className="studio-chip px-2.5 py-1 text-[11px]">斜切</span>
+          <span className="studio-chip px-2.5 py-1 text-[12px]">斜切</span>
         </div>
 
         <p className="text-xs text-[var(--text-secondary)]">
@@ -1102,7 +1102,7 @@ function PanelInspector({ panel }: { panel: Panel }) {
       <div className={sectionClass}>
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">图像来源</h3>
-          <span className="studio-chip px-2.5 py-1 text-[11px]">图像</span>
+          <span className="studio-chip px-2.5 py-1 text-[12px]">图像</span>
         </div>
 
         <input
@@ -1199,7 +1199,7 @@ function BubbleInspector({ bubble }: { bubble: Bubble }) {
       <div className={sectionClass}>
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">文字属性</h3>
-          <span className="studio-chip px-2.5 py-1 text-[11px]">文字</span>
+          <span className="studio-chip px-2.5 py-1 text-[12px]">文字</span>
         </div>
         <p className="text-xs leading-5 text-[var(--text-secondary)]">点击画布上的文字框后，可以在这里切换形状、背景、边框和排版方向。</p>
       </div>
@@ -1298,7 +1298,7 @@ function BubbleInspector({ bubble }: { bubble: Bubble }) {
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-3">
               <span className={labelClass}>最近使用</span>
-              <span className="text-[11px] text-[var(--text-secondary)]">最多保留 5 种</span>
+              <span className="text-[12px] text-[var(--text-secondary)]">最多保留 5 种</span>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -1345,7 +1345,7 @@ function BubbleInspector({ bubble }: { bubble: Bubble }) {
       <div className={sectionClass}>
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">不透明度</h3>
-          <span className="studio-chip px-2.5 py-1 text-[11px]">{Math.round(currentOpacity * 100)}%</span>
+          <span className="studio-chip px-2.5 py-1 text-[12px]">{Math.round(currentOpacity * 100)}%</span>
         </div>
 
         <input
@@ -1393,7 +1393,7 @@ function OverlayInspector({ overlay }: { overlay: OverlayImage }) {
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">
             {stickerDef ? "贴纸" : "图片层"}
           </h3>
-          <span className="studio-chip px-2.5 py-1 text-[11px]">
+          <span className="studio-chip px-2.5 py-1 text-[12px]">
             {stickerDef ? stickerDef.name : "Overlay"}
           </span>
         </div>
@@ -1430,7 +1430,7 @@ function OverlayInspector({ overlay }: { overlay: OverlayImage }) {
         <div className={sectionClass}>
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">贴纸颜色</h3>
-            <span className="studio-chip px-2.5 py-1 text-[11px]">{stickerColor.toUpperCase()}</span>
+            <span className="studio-chip px-2.5 py-1 text-[12px]">{stickerColor.toUpperCase()}</span>
           </div>
           <div className="flex flex-wrap gap-2">
             {STICKER_COLORS.map((option) => (
@@ -1468,7 +1468,7 @@ function OverlayInspector({ overlay }: { overlay: OverlayImage }) {
       <div className={sectionClass}>
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">不透明度</h3>
-          <span className="studio-chip px-2.5 py-1 text-[11px]">{Math.round(currentOpacity * 100)}%</span>
+          <span className="studio-chip px-2.5 py-1 text-[12px]">{Math.round(currentOpacity * 100)}%</span>
         </div>
         <input
           type="range"
@@ -1550,7 +1550,7 @@ export default function InspectorPanel() {
 
       {selection ? (
         <div className="mt-4 border-t border-[var(--line-soft)] pt-3">
-          <p className="mb-1.5 text-[11px] text-[var(--text-secondary)]">层级顺序</p>
+          <p className="mb-1.5 text-[12px] text-[var(--text-secondary)]">层级顺序</p>
           <div className="mb-3 grid grid-cols-4 gap-1.5">
             {(
               [
@@ -1564,7 +1564,7 @@ export default function InspectorPanel() {
                 key={move}
                 type="button"
                 data-layer-action={move}
-                className="studio-btn h-8 px-1 text-[11px]"
+                className="studio-btn h-8 px-1 text-[12px]"
                 onClick={() => moveLayer(selection.id, move)}
               >
                 {label}
@@ -1579,7 +1579,7 @@ export default function InspectorPanel() {
           >
             删除选中内容
           </button>
-          <p className="mt-1.5 text-[11px] leading-4 text-[var(--text-secondary)]">
+          <p className="mt-1.5 text-[12px] leading-4 text-[var(--text-secondary)]">
             也可以直接按 Delete 或 Backspace 删除选中的分镜、气泡或图片层。
           </p>
         </div>

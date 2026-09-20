@@ -184,7 +184,7 @@ export default function TemplateLibraryModal() {
       >
         <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-4 py-3">
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">版式模板ates</p>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">版式模板ates</p>
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">整册版式模板</h3>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -198,14 +198,14 @@ export default function TemplateLibraryModal() {
         </div>
 
         <div className="space-y-1 border-b border-[var(--line-soft)] px-4 py-2">
-          <p className="text-[11px] text-[var(--text-primary)]">
+          <p className="text-[12px] text-[var(--text-primary)]">
             模板保存的是<strong>整册排版</strong>：页面尺寸、分镜位置与形状、气泡的摆位与样式。
           </p>
-          <p className="text-[11px] text-[var(--text-secondary)]">
+          <p className="text-[12px] text-[var(--text-secondary)]">
             图片不会存进模板。从模板新建后画面是空的，把新原稿导入到各分镜即可，版式不用重做。
             单个对话框的外观请用左侧的「预设库」。
           </p>
-          <p className="truncate text-[11px] text-[var(--text-secondary)]" title={dir}>
+          <p className="truncate text-[12px] text-[var(--text-secondary)]" title={dir}>
             目录：{dir || "读取中..."}
           </p>
         </div>
@@ -231,14 +231,14 @@ export default function TemplateLibraryModal() {
             >
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-xs font-semibold text-[var(--text-primary)]">{file.name}</span>
-                <span className="block text-[10px] text-[var(--text-secondary)]">
+                <span className="block text-[11px] text-[var(--text-secondary)]">
                   {file.readable ? file.detail : "内容无法解析"} · {formatSize(file.size)} · {formatTime(file.modified)}
                 </span>
               </span>
               <button
                 type="button"
                 data-template-use={file.name}
-                className="studio-btn studio-btn-primary h-7 px-3 text-[11px] disabled:opacity-40"
+                className="studio-btn studio-btn-primary h-7 px-3 text-[12px] disabled:opacity-40"
                 disabled={busyName === file.name}
                 onClick={() => void useTemplate(file.name)}
               >
@@ -246,7 +246,7 @@ export default function TemplateLibraryModal() {
               </button>
               <button
                 type="button"
-                className="studio-btn studio-btn-danger h-7 px-2 text-[11px] disabled:opacity-40"
+                className="studio-btn studio-btn-danger h-7 px-2 text-[12px] disabled:opacity-40"
                 disabled={busyName === file.name}
                 onClick={() => void removeFile(file.name)}
               >
@@ -257,9 +257,9 @@ export default function TemplateLibraryModal() {
         </div>
 
         <div className="border-t border-[var(--line-soft)] px-4 py-3">
-          <p className="mb-2 text-[11px] font-semibold text-[var(--text-primary)]">把当前项目存为模板</p>
+          <p className="mb-2 text-[12px] font-semibold text-[var(--text-primary)]">把当前项目存为模板</p>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] text-[var(--text-secondary)]">
+            <span className="text-[12px] text-[var(--text-secondary)]">
               当前 {pageCount} 页 · {panelCount} 分镜 · {bubbleCount} 气泡（图片不入库）
             </span>
             <input

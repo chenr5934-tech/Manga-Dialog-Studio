@@ -20,7 +20,7 @@ const compactButtonClass = "studio-btn h-8 px-2.5 text-xs";
 const projectNameClass = "studio-input h-8 w-[190px] px-3 text-sm font-semibold";
 const primaryButtonClass = `${buttonClass} studio-btn-primary`;
 const groupClass = "studio-subtle space-y-2 rounded-2xl p-3";
-const groupTitleClass = "text-[11px] uppercase tracking-[0.16em] text-[var(--text-secondary)]";
+const groupTitleClass = "text-[12px] uppercase tracking-[0.16em] text-[var(--text-secondary)]";
 
 type ToolCategory = "layout" | "style" | "export" | "project";
 
@@ -189,7 +189,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
   return (
     <header className="studio-surface relative z-20 p-2.5">
       <div className="mb-2 flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--line-soft)] bg-[var(--panel-1)] px-2.5 py-2">
-        <span className="studio-chip px-2.5 py-1 text-[11px] font-semibold tracking-[0.08em]">漫画对话工坊</span>
+        <span className="studio-chip px-2.5 py-1 text-[12px] font-semibold tracking-[0.08em]">漫画对话工坊</span>
 
         <input
           className={projectNameClass}
@@ -228,7 +228,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
             重做
           </button>
           <div className="studio-subtle flex h-8 items-center gap-2 rounded-full px-2">
-            <span className={`text-[11px] ${themeMode === "light" ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>
+            <span className={`text-[12px] ${themeMode === "light" ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>
               亮
             </span>
             <button
@@ -242,7 +242,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
             >
               <span className="studio-switch-thumb" />
             </button>
-            <span className={`text-[11px] ${themeMode === "dark" ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>
+            <span className={`text-[12px] ${themeMode === "dark" ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>
               暗
             </span>
           </div>
@@ -290,7 +290,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
 
           <aside className="studio-surface fixed right-3 top-[84px] z-50 w-[340px] max-w-[92vw] max-h-[calc(100vh-96px)] overflow-auto p-3">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">
+              <span className="text-[12px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">
                 {categoryTitleMap[activeCategory]}工具
               </span>
               <button className={compactButtonClass} onClick={() => setActiveCategory(null)}>
@@ -643,7 +643,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                   </div>
 
                   <div className="space-y-1">
-                    <span className="block text-[11px] text-[var(--text-secondary)]">
+                    <span className="block text-[12px] text-[var(--text-secondary)]">
                       或者直接用内置的（不用自己找图）
                     </span>
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -668,7 +668,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                   </div>
 
                   <label className="block space-y-1">
-                    <span className="text-[11px] text-[var(--text-secondary)]">
+                    <span className="text-[12px] text-[var(--text-secondary)]">
                       壁纸不透明度 {uiTheme.wallpaperOpacity}%
                     </span>
                     <input
@@ -684,7 +684,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                   </label>
 
                   <label className="block space-y-1">
-                    <span className="text-[11px] text-[var(--text-secondary)]">
+                    <span className="text-[12px] text-[var(--text-secondary)]">
                       壁纸模糊 {uiTheme.wallpaperBlur}px
                     </span>
                     <input
@@ -700,7 +700,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                   </label>
 
                   <label className="block space-y-1">
-                    <span className="text-[11px] text-[var(--text-secondary)]">
+                    <span className="text-[12px] text-[var(--text-secondary)]">
                       压暗 {uiTheme.wallpaperDim}%（调大，面板上的字更清楚）
                     </span>
                     <input
@@ -716,7 +716,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                   </label>
 
                   <label className="block space-y-1">
-                    <span className="text-[11px] text-[var(--text-secondary)]">
+                    <span className="text-[12px] text-[var(--text-secondary)]">
                       面板不透明度 {uiTheme.panelOpacity}%（调小，壁纸才透得出来）
                     </span>
                     <input

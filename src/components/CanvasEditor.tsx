@@ -1201,7 +1201,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
           >
             -
           </button>
-          <label className="text-[11px] text-[var(--text-secondary)]">缩放 {Math.round(zoom * 100)}%</label>
+          <label className="text-[12px] text-[var(--text-secondary)]">缩放 {Math.round(zoom * 100)}%</label>
           <input
             type="range"
             min={0.1}
@@ -1225,7 +1225,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
 
       {pickingMode && (
         <div className="shrink-0 border-b border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1.5">
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-primary)]">
+          <div className="flex flex-wrap items-center gap-2 text-[12px] text-[var(--text-primary)]">
             <span className="studio-chip px-2 py-0.5 font-semibold">
               {agentScopePicking ? "框定 Agent 范围" : manualPanelMode ? "矩形扣选中" : "多边形扣选中"}
             </span>
@@ -1238,7 +1238,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
             </span>
             <button
               type="button"
-              className="studio-btn ml-auto h-6 px-2 text-[11px]"
+              className="studio-btn ml-auto h-6 px-2 text-[12px]"
               onClick={() => {
                 if (agentScopePicking) {
                   toggleAgentScopePicking(false);
@@ -1264,14 +1264,14 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
             {polygonPoints.length >= 3 ? (
               <>
                 <span className="text-[var(--text-primary)]">按</span>
-                <kbd className="rounded border border-[var(--line-strong)] bg-[var(--panel-0)] px-2 py-0.5 font-mono text-[11px] font-semibold text-[var(--text-primary)]">
+                <kbd className="rounded border border-[var(--line-strong)] bg-[var(--panel-0)] px-2 py-0.5 font-mono text-[12px] font-semibold text-[var(--text-primary)]">
                   Enter
                 </kbd>
                 <span className="font-semibold text-[var(--text-primary)]">键闭合多边形</span>
-                <button type="button" className="studio-btn studio-btn-primary h-7 px-3 text-[11px]" onClick={commitPolygon}>
+                <button type="button" className="studio-btn studio-btn-primary h-7 px-3 text-[12px]" onClick={commitPolygon}>
                   完成闭合
                 </button>
-                <button type="button" className="studio-btn h-7 px-2 text-[11px]" onClick={() => setPolygonPoints([])}>
+                <button type="button" className="studio-btn h-7 px-2 text-[12px]" onClick={() => setPolygonPoints([])}>
                   重来
                 </button>
               </>

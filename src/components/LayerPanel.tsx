@@ -1,12 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ComponentType } from "react";
 import { buildLayerRows, LayerEntry, LayerMove } from "../lib/layers";
 import { getActivePage, useEditorStore } from "../lib/store";
+import {
+  IconArrowDown,
+  IconArrowUp,
+  IconChevronDown,
+  IconChevronRight,
+  IconToBottom,
+  IconToTop
+} from "./icons";
 
-const MOVE_BUTTONS: { move: LayerMove; glyph: string; label: string }[] = [
-  { move: "top", glyph: "⇈", label: "置于顶层" },
-  { move: "up", glyph: "↑", label: "上移一层" },
-  { move: "down", glyph: "↓", label: "下移一层" },
-  { move: "bottom", glyph: "⇊", label: "置于底层" }
+const MOVE_BUTTONS: { move: LayerMove; Icon: ComponentType<{ size?: number }>; label: string }[] = [
+  { move: "top", Icon: IconToTop, label: "置于顶层" },
+  { move: "up", Icon: IconArrowUp, label: "上移一层" },
+  { move: "down", Icon: IconArrowDown, label: "下移一层" },
+  { move: "bottom", Icon: IconToBottom, label: "置于底层" }
 ];
 
 const KIND_STYLE: Record<string, string> = {
@@ -188,7 +197,7 @@ export default function LayerPanel() {
         >
           <span
             className={
-              "shrink-0 rounded border px-1.5 py-0.5 text-[10px] leading-none " + (KIND_STYLE[entry.kind] ?? "")
+              "shrink-0 rounded border px-1.5 py-0.5 text-[11px] leading-none " + (KIND_STYLE[entry.kind] ?? "")
             }
           >
             {entry.label}
@@ -233,7 +242,7 @@ export default function LayerPanel() {
           type="button"
           data-layer-rename={entry.id}
           title="改名（也可以双击名字）"
-          className="studio-btn h-7 shrink-0 px-2 text-[10px] leading-none opacity-0 transition group-hover:opacity-100"
+          className="studio-btn h-7 shrink-0 px-2 text-[11px] leading-none opacity-0 transition group-hover:opacity-100"
           onClick={(event) => {
             event.stopPropagation();
             beginRename(entry.id, entry.customName ?? "");
@@ -256,7 +265,7 @@ export default function LayerPanel() {
                 moveLayer(entry.id, item.move);
               }}
             >
-              {item.glyph}
+              <item.Icon size={14} />
             </button>
           ))}
         </div>
@@ -269,7 +278,7 @@ export default function LayerPanel() {
       <div className="flex items-center justify-between gap-2 border-b border-[var(--line-soft)] px-3 py-2.5">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-[var(--text-primary)]">画布内容</p>
-          <p className="text-[11px] text-[var(--text-secondary)]">
+          <p className="text-[12px] text-[var(--text-secondary)]">
             最上面一行是最顶层，共 {rows.length} 组
           </p>
         </div>
@@ -362,7 +371,7 @@ export default function LayerPanel() {
                       className="studio-btn h-7 w-7 shrink-0 px-0 text-xs leading-none"
                       onClick={() => toggleLayerGroup(row.group.id)}
                     >
-                      {row.group.collapsed ? "▶" : "▼"}
+                      {row.group.collapsed ? <IconChevronRight size={14} /> : <IconChevronDown size={14} />}
                     </button>
 
                     {editingGroup ? (
@@ -389,7 +398,7 @@ export default function LayerPanel() {
                         onDoubleClick={() => beginRename(row.group.id, row.group.name)}
                       >
                         📁 {row.group.name}
-                        <span className="ml-1.5 text-[10px] font-normal text-[var(--text-secondary)]">
+                        <span className="ml-1.5 text-[11px] font-normal text-[var(--text-secondary)]">
                           {row.group.memberIds.length} 项
                         </span>
                       </span>
@@ -398,7 +407,7 @@ export default function LayerPanel() {
                     <button
                       type="button"
                       data-layer-group-rename={row.group.id}
-                      className="studio-btn h-7 shrink-0 px-2 text-[10px] leading-none opacity-0 transition group-hover:opacity-100"
+                      className="studio-btn h-7 shrink-0 px-2 text-[11px] leading-none opacity-0 transition group-hover:opacity-100"
                       onClick={() => beginRename(row.group.id, row.group.name)}
                     >
                       改名
@@ -407,7 +416,7 @@ export default function LayerPanel() {
                       type="button"
                       data-layer-group-remove={row.group.id}
                       title="解散分组，里面的内容都还在"
-                      className="studio-btn h-7 shrink-0 px-2 text-[10px] leading-none opacity-0 transition group-hover:opacity-100"
+                      className="studio-btn h-7 shrink-0 px-2 text-[11px] leading-none opacity-0 transition group-hover:opacity-100"
                       onClick={() => removeLayerGroup(row.group.id)}
                     >
                       解散
@@ -424,7 +433,7 @@ export default function LayerPanel() {
         )}
       </div>
 
-      <p className="border-t border-[var(--line-soft)] px-3 py-2 text-[10px] leading-4 text-[var(--text-secondary)]">
+      <p className="border-t border-[var(--line-soft)] px-3 py-2 text-[11px] leading-4 text-[var(--text-secondary)]">
         拖动整行可以改叠放顺序，双击名字可以改名。分组只影响这份列表的排列，不改动画布上的叠放顺序。
       </p>
     </aside>

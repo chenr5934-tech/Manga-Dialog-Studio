@@ -12,11 +12,19 @@ import { POOLED_IMAGE_DND_MIME, loadImageElement } from "../lib/dnd";
 import { findPooledImage } from "../lib/imagePool";
 import { collectProjectImages } from "../lib/imagePool";
 import { BubbleShapeLayer, BubbleTextLayer, resolveBubbleOpacity } from "./BubbleVisual";
+import {
+  IconArrowDown,
+  IconArrowUp,
+  IconChevronDown,
+  IconChevronUp,
+  IconCopy,
+  IconPlus,
+  IconTrash
+} from "./icons";
 
 const iconButtonClass =
-  "studio-btn flex h-7 w-7 items-center justify-center text-xs disabled:cursor-not-allowed disabled:opacity-35";
+  "studio-btn flex h-8 items-center justify-center disabled:cursor-not-allowed disabled:opacity-35";
 
-const RAIL_WIDTH = 128;
 const THUMB_MAX_WIDTH = 92;
 const THUMB_MAX_HEIGHT = 132;
 
@@ -277,12 +285,11 @@ export default function ThumbRail() {
   return (
     <aside
       data-thumb-rail="1"
-      className="studio-surface flex h-full min-h-0 flex-col overflow-hidden"
-      style={{ width: RAIL_WIDTH }}
+      className="studio-surface flex h-full min-h-0 w-full flex-col overflow-hidden"
     >
       <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-2.5 py-2">
-        <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">胶片</span>
-        <span className="studio-chip px-1.5 py-0.5 text-[10px]">
+        <span className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">胶片</span>
+        <span className="studio-chip tnum px-1.5 py-0.5 text-[11px]">
           {activeIndex + 1}/{project.pages.length}
         </span>
       </div>
@@ -402,7 +409,7 @@ export default function ThumbRail() {
               }`}
             >
               <span
-                className={`absolute left-1 top-1 rounded px-1 text-[10px] font-semibold leading-4 ${
+                className={`tnum absolute left-1 top-1 rounded px-1 text-[11px] font-semibold leading-4 ${
                   isActive ? "bg-[var(--accent)] text-white" : "bg-[var(--panel-1)] text-[var(--text-secondary)]"
                 }`}
               >
@@ -411,7 +418,7 @@ export default function ThumbRail() {
               <span className="overflow-hidden rounded border border-[var(--line-soft)] bg-white shadow-[0_4px_12px_rgba(2,6,23,0.28)]">
                 <PageThumbnail page={page} />
               </span>
-              <span className="text-[10px] text-[var(--text-secondary)]">
+              <span className="text-[11px] text-[var(--text-secondary)]">
                 分镜 {page.panels.length} · 字 {page.bubbles.length}
               </span>
             </div>
@@ -419,27 +426,20 @@ export default function ThumbRail() {
         })}
       </div>
 
-      <div className="flex items-center justify-between gap-1 border-t border-[var(--line-soft)] px-2 py-2">
+      {/* 等宽网格。原来是两行 justify-between 硬塞 4+3 个按钮，
+          116px 宽的栏里每个被压到 25px —— 既难点准，符号也糊成一团。
+          现在按「翻页 / 增删改序」分组，每个按钮 32px 高、宽度由网格均分；
+          删除单独占满一行，红底加文字，不会和相邻按钮混掉。 */}
+      <div className="grid grid-cols-3 gap-1 border-t border-[var(--line-soft)] px-2 py-2">
         <button
           type="button"
           className={iconButtonClass}
           disabled={activeIndex === 0}
           onClick={() => setActivePage(project.pages[Math.max(0, activeIndex - 1)].id)}
           title="上一页"
+          aria-label="上一页"
         >
-          ▲
-        </button>
-        <button
-          type="button"
-          data-page-duplicate="1"
-          className={iconButtonClass}
-          onClick={() => duplicatePage(project.activePageId)}
-          title="复制当前页：内容原样复制一份，插在它后面"
-        >
-          ⧉
-        </button>
-        <button type="button" className={iconButtonClass} onClick={() => addPage()} title="新增空白页面">
-          ＋
+          <IconChevronUp size={15} />
         </button>
         <button
           type="button"
@@ -447,29 +447,39 @@ export default function ThumbRail() {
           disabled={activeIndex >= project.pages.length - 1}
           onClick={() => setActivePage(project.pages[Math.min(project.pages.length - 1, activeIndex + 1)].id)}
           title="下一页"
+          aria-label="下一页"
         >
-          ▼
+          <IconChevronDown size={15} />
         </button>
-      </div>
+        <button
+          type="button"
+          className={iconButtonClass}
+          onClick={() => addPage()}
+          title="新增空白页面"
+          aria-label="新增空白页面"
+        >
+          <IconPlus size={15} />
+        </button>
 
-      <div className="flex items-center justify-between gap-1 border-t border-[var(--line-soft)] px-2 py-2">
+        <button
+          type="button"
+          data-page-duplicate="1"
+          className={iconButtonClass}
+          onClick={() => duplicatePage(project.activePageId)}
+          title="复制当前页：内容原样复制一份，插在它后面"
+          aria-label="复制当前页"
+        >
+          <IconCopy size={15} />
+        </button>
         <button
           type="button"
           className={iconButtonClass}
           disabled={activeIndex === 0}
           onClick={() => movePage(project.activePageId, "up")}
           title="上移该页"
+          aria-label="上移该页"
         >
-          ↥
-        </button>
-        <button
-          type="button"
-          className={`${iconButtonClass} studio-btn-danger`}
-          disabled={project.pages.length <= 1}
-          onClick={() => deletePage(project.activePageId)}
-          title="删除该页"
-        >
-          ✕
+          <IconArrowUp size={15} />
         </button>
         <button
           type="button"
@@ -477,8 +487,21 @@ export default function ThumbRail() {
           disabled={activeIndex >= project.pages.length - 1}
           onClick={() => movePage(project.activePageId, "down")}
           title="下移该页"
+          aria-label="下移该页"
         >
-          ↧
+          <IconArrowDown size={15} />
+        </button>
+
+        <button
+          type="button"
+          className={`${iconButtonClass} studio-btn-danger col-span-3 gap-1.5 text-[12px]`}
+          disabled={project.pages.length <= 1}
+          onClick={() => deletePage(project.activePageId)}
+          title="删除该页（至少保留一页）"
+          aria-label="删除该页"
+        >
+          <IconTrash size={14} />
+          <span>删除该页</span>
         </button>
       </div>
     </aside>
