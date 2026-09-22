@@ -219,8 +219,18 @@ try {
   const pseudoBg = await page.evaluate(() => getComputedStyle(document.documentElement, "::before").backgroundImage);
   record("壁纸层真的画上了壁纸", pseudoBg.startsWith("url("), "前缀=" + pseudoBg.slice(0, 24));
 
-  const gridKept = await page.evaluate(() => getComputedStyle(document.body, "::before").backgroundImage);
-  record("原来的网格纹理没被顶掉", gridKept.includes("linear-gradient"), "前缀=" + gridKept.slice(0, 24));
+  // 以前这里验的是"body 上的网格纹理还在"。现在整页网格已经去掉（它是装饰，
+  // 网格只留在画布区），所以改成验更本质的结构：壁纸挂在自己的层上，
+  // 没有别的装饰层跟它抢同一个伪元素。
+  const layerSplit = await page.evaluate(() => ({
+    wallpaperLayer: getComputedStyle(document.documentElement, "::before").backgroundImage.slice(0, 8),
+    bodyLayer: getComputedStyle(document.body, "::before").backgroundImage
+  }));
+  record(
+    "壁纸层是独立的，不会被别的装饰层顶掉",
+    layerSplit.wallpaperLayer.startsWith("url(") && layerSplit.bodyLayer === "none",
+    "壁纸层=" + layerSplit.wallpaperLayer + " body 层=" + layerSplit.bodyLayer
+  );
 
   const pseudoOpacity = await page.evaluate(() => getComputedStyle(document.documentElement, "::before").opacity);
   record("壁纸层按不透明度渲染", pseudoOpacity === "1", "opacity=" + pseudoOpacity);

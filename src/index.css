@@ -53,20 +53,32 @@ body::after {
   opacity: var(--ui-wallpaper-dim);
 }
 
+/* 配色改成专业工具那套逻辑（对照 Adobe Spectrum 深色主题的实测值：
+   底层 rgb(27,27,27) → 面板 rgb(44,44,44) → rgb(50,50,50)，逐级提亮）：
+   · 层次靠**明度递增**，不再靠大投影和毛玻璃
+   · 边框是「白色 7%」，不是彩色灰 —— 中性发丝线在任何底色上都成立
+   · 交互反馈靠提亮，不靠位移
+   色相仍保留原本的青蓝家族，只把明度关系重排。 */
 :root {
-  --bg-0: #070b11;
-  --bg-1: #0f1621;
-  --bg-2: #161f2b;
-  --panel-0: rgba(13, 19, 29, var(--ui-panel-alpha, 0.92));
-  --panel-1: rgba(19, 27, 39, calc(var(--ui-panel-alpha, 0.92) - 0.04));
-  --line-soft: rgba(115, 138, 168, 0.28);
-  --line-strong: rgba(148, 172, 204, 0.4);
-  --text-primary: #e2edf9;
-  --text-secondary: #9db0ca;
-  --accent: #25a6d9;
-  --accent-strong: #1497cb;
-  --accent-soft: rgba(37, 166, 217, 0.18);
-  --danger: #ef6c73;
+  --bg-0: #0a0c10;
+  --bg-1: #101317;
+  --bg-2: #171b20;
+  --panel-0: rgba(23, 27, 33, var(--ui-panel-alpha, 0.92));
+  --panel-1: rgba(31, 36, 43, var(--ui-panel-alpha, 0.92));
+  --panel-2: rgba(41, 47, 56, var(--ui-panel-alpha, 0.92));
+  --line-soft: rgba(255, 255, 255, 0.075);
+  --line-strong: rgba(255, 255, 255, 0.15);
+  --top-light: rgba(255, 255, 255, 0.05);
+  --sunk: rgba(0, 0, 0, 0.3);
+  --text-primary: #e6ebf2;
+  --text-secondary: #98a2b0;
+  --accent: #2b9fd6;
+  --accent-strong: #1a86bb;
+  /* 主按钮的底色，比 accent-strong 更深一档：白字压在上面要够 4.5:1。
+     实测 accent-strong 只有 4.06:1，hover 换到 accent 更掉到 3.0。 */
+  --accent-deep: #0f7aae;
+  --accent-soft: rgba(43, 159, 214, 0.16);
+  --danger: #e2646c;
   color: var(--text-primary);
   font-family:
     "Avenir Next",
@@ -80,61 +92,32 @@ body::after {
 }
 
 :root[data-theme="light"] {
-  --bg-0: #edf3fc;
-  --bg-1: #f6f9ff;
+  --bg-0: #eceff3;
+  --bg-1: #f4f6f9;
   --bg-2: #ffffff;
-  --panel-0: rgba(250, 253, 255, var(--ui-panel-alpha, 0.92));
-  --panel-1: rgba(243, 248, 255, var(--ui-panel-alpha, 0.92));
-  --line-soft: rgba(89, 114, 148, 0.24);
-  --line-strong: rgba(84, 107, 139, 0.42);
-  --text-primary: #172438;
-  --text-secondary: #54657d;
+  --panel-0: rgba(255, 255, 255, var(--ui-panel-alpha, 0.92));
+  --panel-1: rgba(247, 249, 252, var(--ui-panel-alpha, 0.92));
+  --panel-2: rgba(238, 242, 247, var(--ui-panel-alpha, 0.92));
+  --line-soft: rgba(16, 24, 40, 0.09);
+  --line-strong: rgba(16, 24, 40, 0.18);
+  --top-light: rgba(255, 255, 255, 0.9);
+  --sunk: rgba(16, 24, 40, 0.07);
+  --text-primary: #101828;
+  --text-secondary: #5a6675;
   --accent: #0f8bbe;
   --accent-strong: #0476a4;
-  --accent-soft: rgba(15, 139, 190, 0.15);
-  --danger: #cd4b57;
+  --accent-deep: #04678f;
+  --accent-soft: rgba(15, 139, 190, 0.13);
+  --danger: #c8454f;
 }
 
+/* 底层是纯色。原来那三层径向渐变加上整页的网格纹理，属于"网页感"而不是工具感，
+   实测的检测器也把它标成了 generated-UI 特征。网格纹理只保留在画布区 ——
+   那里它是真的在提示"可绘制范围"。 */
 body {
   margin: 0;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 0% 0%, rgba(24, 152, 209, 0.2), transparent 34%),
-    radial-gradient(circle at 85% 5%, rgba(228, 185, 91, 0.14), transparent 30%),
-    radial-gradient(circle at 50% 100%, rgba(63, 113, 170, 0.2), transparent 38%),
-    linear-gradient(150deg, var(--bg-0) 0%, #0a1018 48%, #101725 100%);
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-  background-size:
-    48px 48px,
-    48px 48px;
-  mix-blend-mode: soft-light;
-  opacity: 0.35;
-  z-index: -1;
-}
-
-:root[data-theme="light"] body {
-  background:
-    radial-gradient(circle at 0% 0%, rgba(15, 139, 190, 0.18), transparent 34%),
-    radial-gradient(circle at 90% 8%, rgba(239, 185, 85, 0.16), transparent 30%),
-    radial-gradient(circle at 45% 100%, rgba(92, 125, 170, 0.18), transparent 38%),
-    linear-gradient(150deg, #eef4fc 0%, #e7f0fb 50%, #dde9f7 100%);
-}
-
-:root[data-theme="light"] body::before {
-  background:
-    linear-gradient(rgba(33, 63, 104, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(33, 63, 104, 0.055) 1px, transparent 1px);
-  mix-blend-mode: normal;
-  opacity: 0.38;
+  background: var(--bg-0);
 }
 
 * {
@@ -201,83 +184,83 @@ button:disabled {
   opacity: 0.5;
 }
 
+/* 滚动条收窄、去圆角：10px 的胖滑块是浏览器默认审美，
+   工具软件的滚动条是细而精确的。 */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(148, 163, 184, 0.08);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.38);
-  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
-:root[data-theme="light"] ::-webkit-scrollbar-track {
-  background: rgba(71, 85, 105, 0.08);
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+  background-clip: padding-box;
 }
 
 :root[data-theme="light"] ::-webkit-scrollbar-thumb {
-  background: rgba(71, 85, 105, 0.44);
+  background: rgba(16, 24, 40, 0.18);
+  background-clip: padding-box;
+}
+
+:root[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 24, 40, 0.3);
+  background-clip: padding-box;
 }
 
 .app-shell {
   min-height: 100vh;
-  padding: 14px;
+  padding: 12px;
 }
 
+/* 面板层次靠明度：底色 → 面板 → 面板内的块，逐级提亮（对照 Adobe Spectrum
+   深色主题 27 → 44 → 50 的递进）。投影只留一层极轻的落地影，
+   不再是 18px/48px 那种大范围光晕 —— 那正是"网页卡片"的做法。 */
 .studio-surface {
-  border-radius: 18px;
-  border: 1px solid var(--line-soft);
-  background: linear-gradient(155deg, var(--panel-1), var(--panel-0));
-  box-shadow:
-    0 18px 48px rgba(3, 9, 18, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(8px);
-}
-
-.studio-subtle {
-  border: 1px solid rgba(148, 172, 204, 0.22);
-  background: rgba(11, 17, 26, 0.72);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
-:root[data-theme="light"] .studio-surface {
-  box-shadow:
-    0 12px 34px rgba(24, 54, 94, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.86);
-}
-
-:root[data-theme="light"] .studio-subtle {
-  border: 1px solid rgba(89, 114, 148, 0.24);
-  background: rgba(238, 246, 255, 0.86);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
-}
-
-.studio-input {
   border-radius: 10px;
   border: 1px solid var(--line-soft);
-  background: rgba(8, 12, 19, 0.78);
+  background: var(--panel-0);
+  box-shadow:
+    inset 0 1px 0 var(--top-light),
+    0 1px 2px var(--sunk);
+}
+
+/* 面板里的次级块：比面板亮一档，靠明度分层而不是靠描边 */
+.studio-subtle {
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--panel-1);
+  box-shadow: inset 0 1px 0 var(--top-light);
+}
+
+/* 只有铺了壁纸才需要毛玻璃：那时面板是半透明的，模糊能让文字站稳。
+   没壁纸时保持纯色 —— 这才是工具该有的样子。 */
+:root[data-wallpaper="on"] .studio-surface {
+  backdrop-filter: blur(14px) saturate(1.15);
+}
+
+/* 输入框是凹进去的：内阴影 + 比面板暗一档的底。
+   按钮凸（内高光）、输入框凹（内阴影），这一对关系是专业工具手感的支点。 */
+.studio-input {
+  border-radius: 6px;
+  border: 1px solid var(--line-soft);
+  background: var(--bg-1);
   color: var(--text-primary);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 1px 2px var(--sunk);
 }
 
 .studio-input::placeholder,
 .studio-textarea::placeholder {
-  color: rgba(157, 176, 202, 0.55);
-}
-
-:root[data-theme="light"] .studio-input,
-:root[data-theme="light"] .studio-textarea {
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
-}
-
-:root[data-theme="light"] .studio-input::placeholder,
-:root[data-theme="light"] .studio-textarea::placeholder {
-  color: rgba(84, 101, 125, 0.62);
+  color: color-mix(in srgb, var(--text-secondary) 62%, transparent);
 }
 
 input,
@@ -291,112 +274,137 @@ textarea {
   outline: none;
   border-color: var(--accent);
   box-shadow:
-    0 0 0 3px rgba(37, 166, 217, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    inset 0 1px 2px var(--sunk),
+    0 0 0 2px var(--accent-soft);
 }
 
 .studio-select {
-  border-radius: 10px;
+  border-radius: 6px;
   border: 1px solid var(--line-soft);
-  background: rgba(8, 12, 19, 0.9);
+  background: var(--bg-1);
   color: var(--text-primary);
-}
-
-:root[data-theme="light"] .studio-select {
-  background: rgba(255, 255, 255, 0.96);
+  box-shadow: inset 0 1px 2px var(--sunk);
 }
 
 .studio-textarea {
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid var(--line-soft);
-  background: rgba(8, 12, 19, 0.82);
+  background: var(--bg-1);
   color: var(--text-primary);
+  box-shadow: inset 0 1px 2px var(--sunk);
 }
 
+/* 按钮是凸的：一层极轻的顶光渐变叠在纯色上，再加 1px 内高光。
+   去掉了 hover 的 translateY(-1px) 位移 —— 一排按钮一起上下抖很廉价，
+   改成提亮明度，这也是 Spectrum 深色主题的反馈方式（default → hover 提亮一档）。 */
 .studio-btn {
-  border-radius: 10px;
-  border: 1px solid rgba(153, 175, 205, 0.38);
-  background: linear-gradient(180deg, rgba(35, 49, 69, 0.85), rgba(20, 29, 44, 0.9));
+  border-radius: 6px;
+  border: 1px solid var(--line-soft);
+  background:
+    linear-gradient(180deg, var(--top-light), transparent),
+    var(--panel-1);
   color: var(--text-primary);
+  box-shadow: inset 0 1px 0 var(--top-light);
   letter-spacing: 0.01em;
 }
 
-:root[data-theme="light"] .studio-btn {
-  border-color: rgba(96, 121, 157, 0.38);
-  background: linear-gradient(180deg, rgba(246, 251, 255, 0.98), rgba(229, 238, 249, 0.96));
-  color: var(--text-primary);
-}
-
 .studio-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  border-color: rgba(186, 209, 236, 0.6);
-  background: linear-gradient(180deg, rgba(50, 68, 94, 0.92), rgba(26, 37, 56, 0.95));
+  border-color: var(--line-strong);
+  background:
+    linear-gradient(180deg, var(--top-light), transparent),
+    var(--panel-2);
 }
 
-:root[data-theme="light"] .studio-btn:hover:not(:disabled) {
-  border-color: rgba(86, 117, 158, 0.56);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(234, 243, 252, 1));
+.studio-btn:active:not(:disabled) {
+  background: var(--panel-0);
+  box-shadow: inset 0 1px 3px var(--sunk);
 }
 
 .studio-btn-primary {
-  border-color: rgba(67, 194, 235, 0.65);
-  background: linear-gradient(180deg, rgba(42, 155, 194, 0.95), rgba(19, 118, 163, 0.95));
+  border-color: rgba(43, 159, 214, 0.55);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent),
+    var(--accent-deep);
+  color: #ffffff;
   box-shadow:
-    0 10px 24px rgba(9, 111, 150, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 1px 2px var(--sunk);
 }
 
+/* 悬停只加强顶光，不动底色 —— 底色一提亮，白字的对比度就压不住了 */
 .studio-btn-primary:hover:not(:disabled) {
-  background: linear-gradient(180deg, rgba(53, 171, 211, 1), rgba(24, 132, 180, 1));
-  border-color: rgba(100, 215, 255, 0.7);
+  border-color: rgba(90, 190, 235, 0.75);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.04)),
+    var(--accent-deep);
+}
+
+.studio-btn-primary:active:not(:disabled) {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.12), transparent),
+    var(--accent-deep);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
 .studio-btn-danger {
-  border-color: rgba(244, 114, 122, 0.55);
-  background: linear-gradient(180deg, rgba(120, 43, 51, 0.9), rgba(84, 28, 37, 0.9));
+  border-color: rgba(226, 100, 108, 0.5);
+  background:
+    linear-gradient(180deg, var(--top-light), transparent),
+    color-mix(in srgb, var(--danger) 22%, var(--panel-1));
+  color: #ffd9dc;
 }
 
+:root[data-theme="light"] .studio-btn-danger {
+  color: #7d1d24;
+}
+
+.studio-btn-danger:hover:not(:disabled) {
+  border-color: rgba(226, 100, 108, 0.75);
+  background:
+    linear-gradient(180deg, var(--top-light), transparent),
+    color-mix(in srgb, var(--danger) 32%, var(--panel-2));
+}
+
+/* 标签收成小圆角方块。全圆角的胶囊是消费级 App 的语言，
+   工具软件里的状态标签是方的 —— 四个角只留一点点。 */
 .studio-chip {
-  border-radius: 999px;
-  border: 1px solid rgba(148, 172, 204, 0.32);
-  background: rgba(12, 20, 32, 0.72);
+  border-radius: 5px;
+  border: 1px solid var(--line-soft);
+  background: var(--panel-1);
   color: var(--text-secondary);
-}
-
-:root[data-theme="light"] .studio-chip {
-  border-color: rgba(97, 122, 158, 0.34);
-  background: rgba(238, 247, 255, 0.84);
+  box-shadow: inset 0 1px 0 var(--top-light);
 }
 
 .studio-switch {
   position: relative;
   display: inline-flex;
   align-items: center;
-  width: 38px;
-  height: 22px;
+  width: 40px;
+  height: 24px;
   padding: 2px;
-  border: 1px solid rgba(148, 172, 204, 0.4);
+  border: 1px solid var(--line-soft);
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(12, 20, 32, 0.9), rgba(26, 37, 56, 0.95));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background: var(--bg-1);
+  box-shadow: inset 0 1px 2px var(--sunk);
 }
 
 .studio-switch:hover:not(:disabled) {
-  transform: none;
-  border-color: rgba(186, 209, 236, 0.6);
+  border-color: var(--line-strong);
 }
 
 .studio-switch:focus-visible {
   outline: none;
   border-color: var(--accent);
   box-shadow:
-    0 0 0 3px rgba(37, 166, 217, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    inset 0 1px 2px var(--sunk),
+    0 0 0 2px var(--accent-soft);
 }
 
 .studio-switch.is-dark {
-  background: linear-gradient(180deg, rgba(35, 131, 168, 0.96), rgba(19, 118, 163, 0.98));
-  border-color: rgba(100, 215, 255, 0.58);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent),
+    var(--accent-strong);
+  border-color: rgba(43, 159, 214, 0.6);
 }
 
 .studio-switch-thumb {
@@ -404,48 +412,40 @@ textarea {
   width: 16px;
   height: 16px;
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(250, 253, 255, 0.98), rgba(214, 230, 247, 0.92));
+  background: #f4f7fa;
   box-shadow:
-    0 4px 10px rgba(0, 0, 0, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
   transform: translateX(0);
-  transition: transform 0.18s ease;
+  transition: transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .studio-switch.is-dark .studio-switch-thumb {
   transform: translateX(16px);
 }
 
-:root[data-theme="light"] .studio-switch {
-  border-color: rgba(96, 121, 157, 0.36);
-  background: linear-gradient(180deg, rgba(239, 247, 255, 0.98), rgba(219, 231, 246, 0.96));
-}
-
-:root[data-theme="light"] .studio-switch.is-dark {
-  background: linear-gradient(180deg, rgba(54, 161, 201, 0.96), rgba(15, 139, 190, 0.98));
-  border-color: rgba(39, 159, 202, 0.5);
-}
-
+/* 网格只留在这里。全页网格是装饰，画布上的网格是在说"这里是可绘制范围"，
+   同一件事在这两处的性质不一样。 */
 .studio-workspace {
   background:
-    radial-gradient(circle at center, rgba(20, 33, 49, 0.82), rgba(8, 12, 18, 0.95)),
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.024) 1px, transparent 1px),
+    var(--bg-0);
   background-size:
-    auto,
     24px 24px,
-    24px 24px;
+    24px 24px,
+    auto;
 }
 
 :root[data-theme="light"] .studio-workspace {
   background:
-    radial-gradient(circle at center, rgba(232, 241, 252, 0.95), rgba(220, 231, 245, 0.98)),
-    linear-gradient(rgba(20, 62, 104, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(20, 62, 104, 0.08) 1px, transparent 1px);
+    linear-gradient(rgba(16, 24, 40, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 24, 40, 0.035) 1px, transparent 1px),
+    var(--bg-0);
   background-size:
-    auto,
     24px 24px,
-    24px 24px;
+    24px 24px,
+    auto;
 }
 
 /* 透明对话框素材用棋盘格垫底，便于分辨空白区域 */
@@ -480,7 +480,9 @@ textarea {
 .thumb-card-active {
   border-color: var(--accent);
   background: var(--accent-soft);
-  box-shadow: 0 8px 20px rgba(2, 42, 56, 0.32);
+  box-shadow:
+    inset 0 0 0 1px var(--accent-soft),
+    0 1px 2px var(--sunk);
 }
 
 .thumb-card:focus-visible,
@@ -500,46 +502,46 @@ input[type="range"] {
   cursor: pointer;
 }
 
+/* 轨道是凹槽，滑块是近白的金属点 —— 专业软件里滑块不用强调色，
+   强调色留给"当前状态"。 */
 input[type="range"]::-webkit-slider-runnable-track {
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(148, 172, 204, 0.3);
-  border: 1px solid rgba(148, 172, 204, 0.22);
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-1);
+  border: 1px solid var(--line-soft);
+  box-shadow: inset 0 1px 2px var(--sunk);
 }
 
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 20px;
-  height: 20px;
-  /* 24px 高的元素里轨道居中(顶在 8px)，滑块再居中到元素中间，所以是 -6 不是 -7 */
-  margin-top: -6px;
+  width: 14px;
+  height: 14px;
+  /* 24px 高的元素里轨道高 6px、顶在 9px 处；滑块 14px 居中到元素中间是 5px，所以 -4 */
+  margin-top: -4px;
   border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  background: linear-gradient(180deg, #ffffff, #ccd6e2);
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
   cursor: pointer;
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  background: linear-gradient(180deg, #ffffff, #dde5ee);
 }
 
 input[type="range"]::-moz-range-track {
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(148, 172, 204, 0.3);
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-1);
+  border: 1px solid var(--line-soft);
 }
 
 input[type="range"]::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: linear-gradient(180deg, #ffffff, #ccd6e2);
+  border: 1px solid rgba(0, 0, 0, 0.4);
   cursor: pointer;
-}
-
-:root[data-theme="light"] input[type="range"]::-webkit-slider-runnable-track {
-  background: rgba(89, 114, 148, 0.26);
-}
-
-:root[data-theme="light"] input[type="range"]::-moz-range-track {
-  background: rgba(89, 114, 148, 0.26);
 }
