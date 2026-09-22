@@ -28,6 +28,7 @@ import { POOLED_IMAGE_DND_MIME, PRESET_DND_MIME, STICKER_DND_MIME } from "../lib
 import { findPooledImage } from "../lib/imagePool";
 import { resolveLayerOrder } from "../lib/layers";
 import { isPointInsidePanel } from "../lib/panelGeometry";
+import { MAX_EXPORT_PIXELS, exportPixelCount } from "../lib/canvasLimits";
 import { getActivePage, useEditorStore } from "../lib/store";
 import { BubbleShapeLayer, BubbleTextLayer, resolveBubbleOpacity } from "./BubbleVisual";
 
@@ -795,10 +796,35 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
       stage.scale({ x: 1, y: 1 });
       stage.batchDraw();
 
-      return stage.toDataURL({
+      const pixels = exportPixelCount(exportWidth, exportHeight, pixelRatio);
+      if (pixels > MAX_EXPORT_PIXELS) {
+        throw new Error(
+          "这一页 " +
+            exportWidth +
+            "×" +
+            exportHeight +
+            " 按 " +
+            pixelRatio +
+            "x 导出要 " +
+            Math.round(pixels / 1e6) +
+            " 百万像素，超过浏览器能画的上限。把画布调小，或改用 1x 导出。"
+        );
+      }
+
+      const dataUrl = stage.toDataURL({
         mimeType: "image/png",
         pixelRatio
       });
+
+      // 兜底：真撞上没算到的限制时，toDataURL 不会抛错，而是返回空串。
+      // 宁可在这儿报错，也不要给用户一个打不开的 PNG 还说"导出完成"。
+      if (dataUrl.length < 128) {
+        throw new Error(
+          "导出结果是空的（" + Math.round(pixels / 1e6) + " 百万像素），画布可能超出了浏览器上限。"
+        );
+      }
+
+      return dataUrl;
     } finally {
       stage.width(prevWidth);
       stage.height(prevHeight);

@@ -99,23 +99,6 @@ export async function fetchUploadLibrary(): Promise<UploadLibrary> {
   }
 }
 
-// 写回整个库。删除和隐藏都走这里。
-export async function persistUploadLibrary(library: UploadLibrary): Promise<boolean> {
-  try {
-    const response = await fetch("/api/uploads/file", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: LIBRARY_NAME,
-        content: JSON.stringify({ name: LIBRARY_NAME, images: library.images, hidden: library.hidden }, null, 2)
-      })
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
 // 增量追加：只把这批新增的原稿传上去，服务端读回旧库合并后写回。
 // 之前是「读回整库 → 前端合并 → 全量写回」，请求体随库一起长大，
 // 装到几十兆就会超过服务端上限，而且连接是被硬断的，前端只拿到一句 fetch failed。
@@ -162,6 +145,23 @@ export async function appendUploadedImages(list: UploadedImage[], revive: string
     }
   }
   return ok;
+}
+
+// 按 id 删除若干条目。删除原来也是整库全量回写，库大了同样会超过上限。
+export async function dropUploadedImages(ids: string[]): Promise<boolean> {
+  if (ids.length === 0) {
+    return true;
+  }
+  try {
+    const response = await fetch("/api/uploads/drop", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: LIBRARY_NAME, ids })
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 // 隐藏/恢复只会动 hidden 这个字符串数组，单独写一次就够，

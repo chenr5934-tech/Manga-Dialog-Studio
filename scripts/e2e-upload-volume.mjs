@@ -133,6 +133,22 @@ try {
   // 失败之后服务没被搞坏
   const after = await post("/append", JSON.stringify({ name: NAME, items: makeItems(1, 64 * 1024, 900) }));
   record("一次超限之后服务仍然可用", after.status === 200 && readLibrary()?.images?.length === 55, "总数=" + readLibrary()?.images?.length);
+
+  // ---- 按 id 删除：不再整库全量回写 ----
+  const drop = await post("/drop", JSON.stringify({ name: NAME, ids: ["probe-0", "probe-1", "probe-2"] }));
+  record(
+    "可以按 id 删除条目",
+    drop.status === 200 && drop.parsed?.removed === 3 && readLibrary()?.images?.length === 52,
+    "请求 " + drop.mb + "MB → 删掉 " + drop.parsed?.removed + " 条，剩 " + (readLibrary()?.images?.length ?? "无")
+  );
+  record("删除请求体只有几个 id，不背图片数据", Number(drop.mb) < 0.01, "请求体 " + drop.mb + "MB");
+
+  const dropMissing = await post("/drop", JSON.stringify({ name: NAME, ids: ["不存在的 id"] }));
+  record(
+    "删不存在的 id 不会报错也不会误删",
+    dropMissing.status === 200 && dropMissing.parsed?.removed === 0 && readLibrary()?.images?.length === 52,
+    "removed=" + dropMissing.parsed?.removed + " 总数=" + readLibrary()?.images?.length
+  );
 } finally {
   rmSync(FILE, { force: true });
   rmSync(FILE + ".bak", { force: true });

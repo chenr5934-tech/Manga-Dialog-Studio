@@ -16,7 +16,14 @@ import {
   getStickerDef,
   persistCustomStickers
 } from "./stickers";
-import { appendUploadedImages, hashImage, persistHiddenImages, persistUploadLibrary, UploadedImage } from "./uploads";
+import {
+  appendUploadedImages,
+  dropUploadedImages,
+  hashImage,
+  persistHiddenImages,
+  UploadedImage
+} from "./uploads";
+import { clampCanvasSize } from "./canvasLimits";
 import {
   LayerMove,
   moveLayerInOrder,
@@ -1571,9 +1578,16 @@ function sanitizeCanvas(canvas: Partial<ProjectPage["canvas"]> | undefined): Pro
   const dpi = Number(canvas?.dpi ?? fallback.dpi);
   const preset = canvas?.preset;
 
+  // 上下限一起管。上限不是洁癖：画布超过浏览器 canvas 的面积上限之后，
+  // 导出不会报错，而是安安静静给你一个空文件。加载旧项目这条路径同样要过这一关。
+  const fitted = clampCanvasSize(
+    Number.isFinite(width) ? width : fallback.width,
+    Number.isFinite(height) ? height : fallback.height
+  );
+
   return {
-    width: Math.max(240, Math.round(Number.isFinite(width) ? width : fallback.width)),
-    height: Math.max(240, Math.round(Number.isFinite(height) ? height : fallback.height)),
+    width: fitted.width,
+    height: fitted.height,
     dpi: Math.max(72, Math.round(Number.isFinite(dpi) ? dpi : fallback.dpi ?? 300)),
     preset: preset === "A3" || preset === "A4" || preset === "custom" ? preset : "custom"
   };
@@ -2262,8 +2276,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   setCanvasSize: (width, height) => {
     set((state) => {
-      const nextWidth = Math.max(240, Math.round(width));
-      const nextHeight = Math.max(240, Math.round(height));
+      // 上限不是洁癖：超过浏览器 canvas 的面积上限之后，导出会"成功"但产物是空文件。
+      // clamp 到安全范围并说清楚改成了多少，别让用户以为设置生效了。
+      const fitted = clampCanvasSize(width, height);
+      const nextWidth = fitted.width;
+      const nextHeight = fitted.height;
       const nextProject = updateActivePage(state.project, (page) => ({
         ...page,
         canvas: {
@@ -2274,7 +2291,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         }
       }));
 
-      const historyState = withHistory(state, nextProject, `画布尺寸已调整为 ${nextWidth} x ${nextHeight}`);
+      const historyState = withHistory(
+        state,
+        nextProject,
+        fitted.clamped
+          ? `画布尺寸已限制为 ${nextWidth} x ${nextHeight}（单页可导出的上限约 40 百万像素）`
+          : `画布尺寸已调整为 ${nextWidth} x ${nextHeight}`
+      );
       if (!historyState) {
         return state;
       }
@@ -3374,7 +3397,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((state) => {
       const drop = new Set(ids);
       const next = state.uploadedImages.filter((item) => !drop.has(item.id));
-      void persistUploadLibrary({ images: next, hidden: state.hiddenPoolImages }).then((ok) => {
+      void dropUploadedImages(ids).then((ok) => {
         if (!ok) {
           get().setNotice("素材库删除没能写回磁盘，刷新后可能又出现");
         }

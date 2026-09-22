@@ -479,6 +479,64 @@ function createLibraryHandler(kind) {
     return true;
   }
 
+  // 按 id 删除若干条目。删除原来走的是「整库全量回写」，
+  // 库一大同样会撞上体积上限 —— 只是把导入的问题留在了删除这一步。
+  if (pathname === base + "/drop" && request.method === "POST") {
+    let payload;
+    try {
+      payload = JSON.parse(await readRequestBody(request));
+    } catch (error) {
+      const status = Number(error?.statusCode) || 400;
+      sendJson(response, status, {
+        error: status === 413 ? String(error?.message ?? "请求体过大") : "请求内容无法解析"
+      });
+      return true;
+    }
+
+    const target = resolveLibraryPath(dir, payload?.name);
+    if (!target) {
+      sendJson(response, 400, { error: "文件名不合法（不可包含路径分隔符或特殊字符）" });
+      return true;
+    }
+    if (!existsSync(target.path)) {
+      sendJson(response, 200, { ok: true, removed: 0, total: 0 });
+      return true;
+    }
+
+    const ids = new Set((Array.isArray(payload?.ids) ? payload.ids : []).map((entry) => String(entry)));
+    if (ids.size === 0) {
+      sendJson(response, 200, { ok: true, removed: 0, total: 0 });
+      return true;
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(readFileSync(target.path, "utf8"));
+    } catch {
+      sendJson(response, 500, { error: "库文件读不出来，无法删除" });
+      return true;
+    }
+
+    const before = Array.isArray(parsed?.images) ? parsed.images : [];
+    const keep = before.filter((item) => !ids.has(String(item?.id ?? "")));
+    const next = {
+      name: target.name.replace(/\.json$/i, ""),
+      images: keep,
+      hidden: Array.isArray(parsed?.hidden) ? parsed.hidden : []
+    };
+
+    try {
+      keepLibraryBackup(target.path);
+      writeFileSync(target.path, JSON.stringify(next, null, 2), "utf8");
+    } catch (error) {
+      sendJson(response, 500, { error: error instanceof Error ? error.message : "写入失败" });
+      return true;
+    }
+
+    sendJson(response, 200, { ok: true, removed: before.length - keep.length, total: keep.length });
+    return true;
+  }
+
   if (pathname === base + "/file" && request.method === "DELETE") {
     const target = resolveLibraryPath(dir, url.searchParams.get("name"));
     if (!target || !existsSync(target.path)) {
