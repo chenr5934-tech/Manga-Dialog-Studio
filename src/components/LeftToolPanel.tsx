@@ -9,8 +9,8 @@ import {
   loadImageElement,
   readImageFileAsDataUrl
 } from "../lib/dnd";
-import { collectProjectImages, findPooledImage } from "../lib/imagePool";
-import { fetchUploadLibrary, hashImage, makeUploadedImage, persistUploadedImages } from "../lib/uploads";
+import { collectPooledImages, findPooledImage } from "../lib/imagePool";
+import { fetchUploadLibrary, hashImage, makeUploadedImage } from "../lib/uploads";
 import BackgroundRemoverModal from "./BackgroundRemoverModal";
 import FillCanvasModal from "./FillCanvasModal";
 import { normalizePreset } from "../lib/presets";
@@ -134,13 +134,11 @@ export default function LeftToolPanel({
   const stickerInputRef = useRef<HTMLInputElement | null>(null);
 
   const stickerGroups = listStickerGroups();
-  const pooledImages = collectProjectImages(project, uploadedImages, hiddenPoolImages);
+  const pooledImages = collectPooledImages(uploadedImages, hiddenPoolImages);
   const activeCanvas = getActivePage(project).canvas;
-  const bgTargetImage = bgTargetId
-    ? findPooledImage(project, bgTargetId, uploadedImages, hiddenPoolImages)
-    : undefined;
+  const bgTargetImage = bgTargetId ? findPooledImage(bgTargetId, uploadedImages, hiddenPoolImages) : undefined;
   const tileTargetImage = tileTargetId
-    ? findPooledImage(project, tileTargetId, uploadedImages, hiddenPoolImages)
+    ? findPooledImage(tileTargetId, uploadedImages, hiddenPoolImages)
     : undefined;
   const customGroupName = "自定义";
   const activeStickerGroup = stickerGroup || stickerGroups[0]?.name || "";

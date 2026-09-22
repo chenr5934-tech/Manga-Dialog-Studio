@@ -16,7 +16,7 @@ import {
   getStickerDef,
   persistCustomStickers
 } from "./stickers";
-import { hashImage, persistUploadLibrary, UploadedImage } from "./uploads";
+import { appendUploadedImages, hashImage, persistHiddenImages, persistUploadLibrary, UploadedImage } from "./uploads";
 import {
   LayerMove,
   moveLayerInOrder,
@@ -3187,7 +3187,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       }
 
       const images = [...state.uploadedImages, ...fresh];
-      void persistUploadLibrary({ images, hidden });
+      // 只把这批新增传上去。原来是全量写回，库一大请求体就超上限，
+      // 而那时的失败是完全静默的 —— 界面显示导入成功，刷新后图全没了。
+      void appendUploadedImages(fresh, Array.from(revived)).then((ok) => {
+        if (!ok) {
+          get().setNotice("原稿没能写进素材库：这批文件太大或本地服务没在跑，刷新后会丢失");
+        }
+      });
       return { uploadedImages: images, hiddenPoolImages: hidden };
     });
   },
@@ -3368,7 +3374,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((state) => {
       const drop = new Set(ids);
       const next = state.uploadedImages.filter((item) => !drop.has(item.id));
-      void persistUploadLibrary({ images: next, hidden: state.hiddenPoolImages });
+      void persistUploadLibrary({ images: next, hidden: state.hiddenPoolImages }).then((ok) => {
+        if (!ok) {
+          get().setNotice("素材库删除没能写回磁盘，刷新后可能又出现");
+        }
+      });
       return { uploadedImages: next };
     });
   },
@@ -3379,14 +3389,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
     set((state) => {
       const merged = Array.from(new Set([...state.hiddenPoolImages, ...hashes]));
-      void persistUploadLibrary({ images: state.uploadedImages, hidden: merged });
+      void persistHiddenImages(merged);
       return { hiddenPoolImages: merged };
     });
   },
 
   restorePoolImages: () => {
     set((state) => {
-      void persistUploadLibrary({ images: state.uploadedImages, hidden: [] });
+      void persistHiddenImages([]);
       return { hiddenPoolImages: [] };
     });
   },

@@ -320,9 +320,13 @@ record(
   Number.isFinite(afterBg.fields["宽度"]) && afterBg.fields["宽度"] > 0,
   "宽度=" + (afterBg.fields["宽度"] ?? "?") + " 高度=" + (afterBg.fields["高度"] ?? "?")
 );
+// 这里原来断言"抠图结果会出现在素材库里可以再次取用"。
+// 但那属于把画面内容混进素材库：用户一抠图、一平铺、一给气泡换底图，
+// 「已导入图片」栏就多出条目，看起来像编辑器把编辑结果存成了素材（就是这条反馈）。
+// 抠图产物本来就在画布上，直接选中操作即可，没必要再进素材库。
 record(
-  "抠图结果同时出现在「已导入图片」里，可以再次取用",
-  afterBg.pool > basePool,
+  "抠图结果留在画布上，不会混进「已导入图片」栏",
+  afterBg.pool === basePool,
   "抠图前=" + basePool + " 抠图后=" + afterBg.pool
 );
 record(
@@ -438,6 +442,28 @@ for (let attempt = 0; attempt < 40; attempt += 1) {
   previousKey = key;
   await sleep(250);
 }
+
+// 铺满之后「已导入图片」栏不该凭空多出条目：铺满产出的是画布上的图片层，
+// 不是"又导入了一张素材"。这一栏以前会把项目里用到的图一起合并进来，
+// 结果一平铺图片、一给气泡换底图，它就多出东西，看着像编辑器把编辑内容存成了素材。
+await page.click('[data-tool="images"]');
+await sleep(600);
+const poolAfterTile = await poolCount();
+record(
+  "铺满画布之后「已导入图片」栏不会多出条目",
+  poolAfterTile === poolAfterBg,
+  "铺满前 " + poolAfterBg + " → 铺满后 " + poolAfterTile
+);
+const poolKinds = await page.evaluate(() =>
+  Array.from(document.querySelectorAll("[data-pooled-image-kind]")).map((el) =>
+    el.getAttribute("data-pooled-image-kind")
+  )
+);
+record(
+  "栏里只剩素材库条目，不再混入画面里的图",
+  poolKinds.length > 0 && poolKinds.every((kind) => kind === "stored"),
+  "出现过的 kind=" + Array.from(new Set(poolKinds)).join(",")
+);
 
 const afterTile = {
   modalGone: await page.evaluate(() => !document.querySelector('[data-fill-modal="1"]')),

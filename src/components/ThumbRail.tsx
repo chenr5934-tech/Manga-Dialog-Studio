@@ -10,7 +10,6 @@ import { DEFAULT_BACKDROP_COLOR } from "../lib/project";
 import { useEditorStore } from "../lib/store";
 import { POOLED_IMAGE_DND_MIME, loadImageElement } from "../lib/dnd";
 import { findPooledImage } from "../lib/imagePool";
-import { collectProjectImages } from "../lib/imagePool";
 import { BubbleShapeLayer, BubbleTextLayer, resolveBubbleOpacity } from "./BubbleVisual";
 import {
   IconArrowDown,
@@ -211,7 +210,7 @@ export default function ThumbRail() {
 
   // 从左侧「已导入图片」拖过来的素材，落到胶片栏就生成对应的页
   const dropMaterial = async (pooledId: string, afterPageId?: string) => {
-    const pooled = findPooledImage(project, pooledId, uploadedImages, hiddenPoolImages);
+    const pooled = findPooledImage(pooledId, uploadedImages, hiddenPoolImages);
     if (!pooled) {
       setNotice("这张素材已经不在列表里了");
       return;

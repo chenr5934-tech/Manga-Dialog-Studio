@@ -244,20 +244,40 @@ function sendJson(response, status, payload) {
   response.end(JSON.stringify(payload));
 }
 
+class BodyTooLargeError extends Error {
+  constructor(limit) {
+    super("请求体超过上限（" + Math.round(limit / 1024 / 1024) + "MB）");
+    this.statusCode = 413;
+  }
+}
+
 function readRequestBody(request) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
+    let overflow = false;
     request.on("data", (chunk) => {
+      if (overflow) {
+        // 已经超了：继续把数据收完丢掉，但不再占内存。
+        // 原来这里直接 request.destroy()，浏览器只会收到一个连接重置，
+        // 前端 catch 到的是 "fetch failed"，用户完全不知道发生了什么。
+        return;
+      }
       size += chunk.length;
       if (size > MAX_BODY_BYTES) {
-        reject(new Error("请求体过大"));
-        request.destroy();
+        overflow = true;
+        chunks.length = 0;
         return;
       }
       chunks.push(chunk);
     });
-    request.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    request.on("end", () => {
+      if (overflow) {
+        reject(new BodyTooLargeError(MAX_BODY_BYTES));
+        return;
+      }
+      resolve(Buffer.concat(chunks).toString("utf8"));
+    });
     request.on("error", reject);
   });
 }
@@ -346,8 +366,11 @@ function createLibraryHandler(kind) {
     let payload;
     try {
       payload = JSON.parse(await readRequestBody(request));
-    } catch {
-      sendJson(response, 400, { error: "请求内容无法解析" });
+    } catch (error) {
+      const status = Number(error?.statusCode) || 400;
+      sendJson(response, status, {
+        error: status === 413 ? String(error?.message ?? "请求体过大") : "请求内容无法解析"
+      });
       return true;
     }
 
@@ -373,6 +396,86 @@ function createLibraryHandler(kind) {
     keepLibraryBackup(target.path);
     writeFileSync(target.path, payload.content, "utf8");
     sendJson(response, 200, { ok: true, name: target.name, dir });
+    return true;
+  }
+
+  // 增量追加：只上传这批新增的条目，服务端读回旧文件合并。
+  // 导入原来走的是「读回整个库 → 前端合并 → 全量写回」，请求体随库一起长大，
+  // 装满十几张原稿就能把上限撑爆；这个接口让单次请求只跟"这批新增"有关。
+  if (pathname === base + "/append" && request.method === "POST") {
+    let payload;
+    try {
+      payload = JSON.parse(await readRequestBody(request));
+    } catch (error) {
+      const status = Number(error?.statusCode) || 400;
+      sendJson(response, status, {
+        error: status === 413 ? String(error?.message ?? "请求体过大") : "请求内容无法解析"
+      });
+      return true;
+    }
+
+    const target = resolveLibraryPath(dir, payload?.name);
+    if (!target) {
+      sendJson(response, 400, { error: "文件名不合法（不可包含路径分隔符或特殊字符）" });
+      return true;
+    }
+
+    const incoming = Array.isArray(payload?.items) ? payload.items : [];
+    // hidden 单独可写：隐藏/恢复一张图只是改这个数组，
+    // 没必要把整库几十兆再传一遍
+    const nextHidden = Array.isArray(payload?.hidden) ? payload.hidden.map((entry) => String(entry)) : null;
+    if (incoming.length === 0 && !nextHidden) {
+      sendJson(response, 200, { ok: true, name: target.name, added: 0, total: 0 });
+      return true;
+    }
+
+    let current = { images: [], hidden: [] };
+    if (existsSync(target.path)) {
+      try {
+        const parsed = JSON.parse(readFileSync(target.path, "utf8"));
+        current = {
+          images: Array.isArray(parsed?.images) ? parsed.images : Array.isArray(parsed) ? parsed : [],
+          hidden: Array.isArray(parsed?.hidden) ? parsed.hidden : []
+        };
+      } catch {
+        // 旧文件坏了就当空库重建，别让一次追加彻底卡死
+        current = { images: [], hidden: [] };
+      }
+    }
+
+    const seen = new Set(current.images.map((item) => String(item?.image ?? "")));
+    const fresh = incoming.filter((item) => {
+      const image = String(item?.image ?? "");
+      if (!image || seen.has(image)) {
+        return false;
+      }
+      seen.add(image);
+      return true;
+    });
+
+    const revive = new Set((Array.isArray(payload?.revive) ? payload.revive : []).map((entry) => String(entry)));
+    const hidden = nextHidden
+      ? nextHidden
+      : revive.size
+        ? current.hidden.filter((entry) => !revive.has(String(entry)))
+        : current.hidden;
+
+    const next = {
+      name: target.name.replace(/\.json$/i, ""),
+      images: [...current.images, ...fresh],
+      hidden
+    };
+
+    try {
+      ensureLibraryDir(dir);
+      keepLibraryBackup(target.path);
+      writeFileSync(target.path, JSON.stringify(next, null, 2), "utf8");
+    } catch (error) {
+      sendJson(response, 500, { error: error instanceof Error ? error.message : "写入失败" });
+      return true;
+    }
+
+    sendJson(response, 200, { ok: true, name: target.name, added: fresh.length, total: next.images.length });
     return true;
   }
 
@@ -448,8 +551,11 @@ async function handleAgentApi(request, response, pathname) {
     let payload;
     try {
       payload = JSON.parse(await readRequestBody(request));
-    } catch {
-      sendJson(response, 400, { error: "请求内容无法解析" });
+    } catch (error) {
+      const status = Number(error?.statusCode) || 400;
+      sendJson(response, status, {
+        error: status === 413 ? String(error?.message ?? "请求体过大") : "请求内容无法解析"
+      });
       return true;
     }
 
@@ -483,8 +589,11 @@ async function handleAgentApi(request, response, pathname) {
     let payload;
     try {
       payload = JSON.parse(await readRequestBody(request));
-    } catch {
-      sendJson(response, 400, { error: "请求内容无法解析" });
+    } catch (error) {
+      const status = Number(error?.statusCode) || 400;
+      sendJson(response, status, {
+        error: status === 413 ? String(error?.message ?? "请求体过大") : "请求内容无法解析"
+      });
       return true;
     }
 
@@ -553,8 +662,11 @@ async function handleAgentApi(request, response, pathname) {
     let payload;
     try {
       payload = JSON.parse(await readRequestBody(request));
-    } catch {
-      sendJson(response, 400, { error: "请求内容无法解析" });
+    } catch (error) {
+      const status = Number(error?.statusCode) || 400;
+      sendJson(response, status, {
+        error: status === 413 ? String(error?.message ?? "请求体过大") : "请求内容无法解析"
+      });
       return true;
     }
 

@@ -1330,7 +1330,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle>(function CanvasEditor(_props
                 const liveProject = useEditorStore.getState().project;
                 const livePage = getActivePage(liveProject);
                 // 必须和左侧「已导入图片」用同一份常驻列表，否则索引会对不上
-                const pooled = findPooledImage(liveProject, pooledId, uploadedImages);
+                const pooled = findPooledImage(pooledId, uploadedImages);
                 if (!pooled) {
                   return;
                 }

@@ -116,18 +116,67 @@ export async function persistUploadLibrary(library: UploadLibrary): Promise<bool
   }
 }
 
-// 追加保存。先读回已有内容再合并，避免多次导入互相覆盖，同时也保住隐藏记录。
-export async function persistUploadedImages(list: UploadedImage[]): Promise<boolean> {
+// 增量追加：只把这批新增的原稿传上去，服务端读回旧库合并后写回。
+// 之前是「读回整库 → 前端合并 → 全量写回」，请求体随库一起长大，
+// 装到几十兆就会超过服务端上限，而且连接是被硬断的，前端只拿到一句 fetch failed。
+// 单批上限。服务端对一次请求有体积上限，按体积切批之后
+// "一次导入几十张"也不会撞上它。每批都是独立的增量追加、由服务端合并，
+// 所以批与批之间不会互相覆盖。
+const APPEND_BATCH_BYTES = 24 * 1024 * 1024;
+
+export async function appendUploadedImages(list: UploadedImage[], revive: string[] = []): Promise<boolean> {
   if (list.length === 0) {
     return true;
   }
-  const previous = await fetchUploadLibrary();
-  const seen = new Set(previous.images.map((item) => item.image));
-  const fresh = list.filter((item) => !seen.has(item.image));
-  return persistUploadLibrary({
-    images: [...previous.images, ...fresh],
-    hidden: previous.hidden
-  });
+
+  const batches: UploadedImage[][] = [];
+  let current: UploadedImage[] = [];
+  let size = 0;
+  for (const item of list) {
+    const itemSize = item.image.length + 256;
+    if (current.length > 0 && size + itemSize > APPEND_BATCH_BYTES) {
+      batches.push(current);
+      current = [];
+      size = 0;
+    }
+    current.push(item);
+    size += itemSize;
+  }
+  if (current.length > 0) {
+    batches.push(current);
+  }
+
+  let ok = true;
+  for (const batch of batches) {
+    try {
+      const response = await fetch("/api/uploads/append", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: LIBRARY_NAME, items: batch, revive })
+      });
+      if (!response.ok) {
+        ok = false;
+      }
+    } catch {
+      ok = false;
+    }
+  }
+  return ok;
+}
+
+// 隐藏/恢复只会动 hidden 这个字符串数组，单独写一次就够，
+// 不必把整库的图片数据再传一遍
+export async function persistHiddenImages(hidden: string[]): Promise<boolean> {
+  try {
+    const response = await fetch("/api/uploads/append", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: LIBRARY_NAME, hidden })
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 export function makeUploadedImage(
