@@ -580,6 +580,7 @@ src/lib/                状态、几何、渲染、预设
 | `node scripts/e2e-page-delete-key.mjs` | 焦点在胶片栏时 `Delete` 删整页、可撤销、焦点在画布时不会误删页面、删到只剩一页会停下 |
 | `node scripts/e2e-ui-theme.mjs` | 界面背景：`更多` 里有该区块、四根滑条都能拖动生效、**壁纸真的画在独立层上且原来的网格纹理没被顶掉**、参数落盘、刷新后自动恢复、切换明暗不丢、恢复默认后连文件里的壁纸一起清干净 |
 | `node scripts/e2e-agent-key.mjs` | 密钥记忆：保存后真的写进 `config/agent.json`、接口回传、**刷新后自动回填输入框**、只输不点保存直接发指令也会落盘、回填过程不会写坏已有密钥 |
+| `node scripts/_verify-import.mjs` | 端到端导入校验（手动跑）：真的从界面一次导入十几张原稿，验证走增量接口、按体积切批、全部落盘、刷新后仍在、编辑画面不会污染素材库、写入失败会提示。会临时生成约 25MB 探针图，跑完自清 |
 | `node scripts/e2e-upload-volume.mjs` | 大批量导入：增量追加（单请求只含新图、不背老库）、多批连发都能落库、重复追加会去重、hidden 单独写、**超限时返回可读的 413 而不是断开连接**、一次超限后服务仍可用 |
 | `node scripts/e2e-library-backup.mjs` | 两层兜底：覆盖前先留 `<文件>.bak`、删除前也留档、备份不会被当成一个库列出来；跑测试前**整目录寄存** `uploads/`、跑完整体放回，用户的 `.bak` 也不会被顺手清掉 |
 | `node scripts/_run-regression.mjs` | 一次性跑完全部套件并汇总，结果写入 `_regression.log` |
