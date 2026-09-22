@@ -442,7 +442,7 @@ export default function AgentPanel() {
             <span className={labelClass}>
               API Key
               {config?.hasApiKey ? (
-                <span className="ml-2 rounded bg-emerald-400/15 px-1.5 py-0.5 text-[11px] font-normal text-emerald-300">
+                <span className="kind-ok ml-2 rounded px-1.5 py-0.5 text-[11px] font-normal">
                   已记住，不用再输
                 </span>
               ) : null}

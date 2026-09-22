@@ -17,6 +17,10 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // 好几个套件会走「导入图片」流程，而导入会往 uploads/ 写常驻副本。
 // 不隔离的话跑一轮回归就会往用户的素材库里灌几十张测试图，
 // 所以开跑前把整个 uploads/ 寄存起来，跑完整体放回。
+// 上一轮如果被中途打断，东西可能还压在寄存目录里没放回去。
+// 先还原再记账，否则"跑前有多少"会算成 0，跑完对账就误报。
+restoreStashedUploads(UPLOADS_DIR, RUNNER_STASH);
+
 const uploadsBefore = listUploadFiles(UPLOADS_DIR);
 // 用 runner 专属的寄存目录名，别和套件自己那层撞车
 stashUploads(UPLOADS_DIR, RUNNER_STASH);

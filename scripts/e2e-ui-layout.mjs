@@ -183,6 +183,36 @@ const backdropSample = await page.evaluate(() => {
 });
 record("底层仍是铺满编辑区的白色", backdropSample === true, "四角全白=" + backdropSample);
 
+// 每个面板都得有自己的底色。这条是因为「画布内容」栏曾经用一个
+// 样式表里根本没定义的类（studio-panel），面板一直是裸的 —— 页面底色深的时候
+// 看不出来，换成浅色壁纸之后文字就直接浮在壁纸上了。这类"类名没定义"的问题
+// 靠功能测试很难发现，只能直接从渲染结果上量。
+const panelBackdrops = await page.evaluate(() => {
+  const alphaOf = (color) => {
+    const m = String(color).match(/rgba?\(([^)]+)\)/);
+    if (!m) return 0;
+    const parts = m[1].split(",").map((v) => Number(v.trim()));
+    return parts.length > 3 ? parts[3] : 1;
+  };
+  const out = [];
+  const section = document.querySelector("main > section");
+  const columns = section ? Array.from(section.children) : [];
+  columns.forEach((cell, index) => {
+    const panel = cell.firstElementChild ?? cell;
+    const name = String(panel.className).split(/\s+/)[0] || panel.tagName.toLowerCase();
+    out.push({ where: "第 " + (index + 1) + " 栏", name: name.slice(0, 34), bg: getComputedStyle(panel).backgroundColor });
+  });
+  return out.map((item) => ({ ...item, alpha: alphaOf(item.bg) }));
+});
+
+const bare = panelBackdrops.filter((item) => item.alpha < 0.5);
+record(
+  "四栏里的每个面板都有自己的底色",
+  panelBackdrops.length >= 4 && bare.length === 0,
+  panelBackdrops.map((item) => item.where + "=" + item.name).join(" / ") +
+    (bare.length ? "  ← 裸的：" + bare.map((item) => item.where + " " + item.name + " bg=" + item.bg).join("、") : "")
+);
+
 record("运行期无控制台错误", errors.length === 0, errors.slice(0, 2).join(" | "));
 
 await browser.close();

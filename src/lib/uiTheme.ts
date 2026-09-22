@@ -11,7 +11,16 @@ export type UiTheme = {
 
 // 内置背景：不想自己找图的人也能换个底色。值直接是 CSS 背景图，
 // 存在 config 里的写法是 "preset:<id>"，不带任何图片数据。
-export type PresetWallpaper = { id: string; label: string; css: string };
+// effect：需要动态图层的背景额外挂一块 canvas（花瓣、水波）。
+// 静态渐变不需要它，也就不该为它付任何代价。
+export type WallpaperEffectKind = "sakura" | "waves";
+
+export type PresetWallpaper = {
+  id: string;
+  label: string;
+  css: string;
+  effect?: WallpaperEffectKind;
+};
 
 export const PRESET_WALLPAPERS: PresetWallpaper[] = [
   {
@@ -40,11 +49,21 @@ export const PRESET_WALLPAPERS: PresetWallpaper[] = [
   },
   {
     id: "preset:sakura",
-    label: "樱雾（浅色）",
+    label: "樱花粉（花瓣飘落）",
     css:
-      "radial-gradient(circle at 22% 20%, #ffd9e6 0%, transparent 45%)," +
-      " radial-gradient(circle at 80% 75%, #ffe9d6 0%, transparent 50%)," +
-      " linear-gradient(150deg, #fdf3f6 0%, #f8ebf2 55%, #f2e6ef 100%)"
+      "radial-gradient(circle at 22% 18%, #ffe0ec 0%, transparent 46%)," +
+      " radial-gradient(circle at 80% 78%, #fff0dd 0%, transparent 52%)," +
+      " linear-gradient(155deg, #fdf4f7 0%, #fbe9f1 50%, #f6dfeb 100%)",
+    effect: "sakura"
+  },
+  {
+    id: "preset:ocean",
+    label: "海蓝（水面波光）",
+    css:
+      "radial-gradient(circle at 78% 12%, #12507e 0%, transparent 48%)," +
+      " radial-gradient(circle at 18% 88%, #0a3355 0%, transparent 52%)," +
+      " linear-gradient(168deg, #04121f 0%, #071f36 48%, #0a2b47 100%)",
+    effect: "waves"
   }
 ];
 

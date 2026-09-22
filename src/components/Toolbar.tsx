@@ -2,15 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { CANVAS_PRESET_LABELS, CanvasPreset } from "../types";
 import { getActivePage, useEditorStore } from "../lib/store";
 import { loadImageElement, readImageFileAsDataUrl } from "../lib/dnd";
-import {
-  DEFAULT_UI_THEME,
-  PRESET_WALLPAPERS,
-  UiTheme,
-  applyUiTheme,
-  fetchUiTheme,
-  readWallpaperFile,
-  saveUiTheme
-} from "../lib/uiTheme";
+import { PRESET_WALLPAPERS, UiTheme, readWallpaperFile, saveUiTheme } from "../lib/uiTheme";
 
 const inputClass = "studio-input h-9 px-3 text-sm";
 const selectClass = "studio-select h-9 px-3 text-sm";
@@ -42,12 +34,21 @@ const categoryTitleMap: Record<ToolCategory, string> = {
 };
 
 type ToolbarProps = {
+  // 界面外观由 App 持有，这里只是编辑它
+  uiTheme: UiTheme;
+  onUiThemeChange: (theme: UiTheme) => void;
   onExportPng: () => Promise<void>;
   onExportPdf: () => Promise<void>;
   onExportZip: (pixelRatio: number) => Promise<void>;
 };
 
-export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: ToolbarProps) {
+export default function Toolbar({
+  uiTheme,
+  onUiThemeChange,
+  onExportPng,
+  onExportPdf,
+  onExportZip
+}: ToolbarProps) {
   const project = useEditorStore((state) => state.project);
   const activePage = useEditorStore((state) => getActivePage(state.project));
   const snapSizeTo16 = useEditorStore((state) => state.snapSizeTo16);
@@ -87,7 +88,6 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
   const [allBorderWidth, setAllBorderWidth] = useState(4);
   const [activeCategory, setActiveCategory] = useState<ToolCategory | null>(null);
   const [zipPixelRatio, setZipPixelRatio] = useState(2);
-  const [uiTheme, setUiTheme] = useState<UiTheme>(DEFAULT_UI_THEME);
   const wallpaperInputRef = useRef<HTMLInputElement | null>(null);
   const uiThemeSaveTimer = useRef<number | null>(null);
   const overlayInputRef = useRef<HTMLInputElement | null>(null);
@@ -125,27 +125,9 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [activeCategory]);
 
-  useEffect(() => {
-    let alive = true;
-    void fetchUiTheme().then((theme) => {
-      if (!alive) {
-        return;
-      }
-      setUiTheme(theme);
-      applyUiTheme(theme);
-    });
-    return () => {
-      alive = false;
-      if (uiThemeSaveTimer.current !== null) {
-        window.clearTimeout(uiThemeSaveTimer.current);
-      }
-    };
-  }, []);
-
   // 滑块拖动会高频触发，攒 320ms 再落盘，避免狂刷 POST
   const commitUiTheme = (next: UiTheme, immediate = false) => {
-    setUiTheme(next);
-    applyUiTheme(next);
+    onUiThemeChange(next);
     if (uiThemeSaveTimer.current !== null) {
       window.clearTimeout(uiThemeSaveTimer.current);
       uiThemeSaveTimer.current = null;
@@ -160,7 +142,8 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
     }, 320);
   };
 
-  const onUiThemeChange = (patch: Partial<UiTheme>) => {
+  // 改单独一项：滑条拖动时用它，避免各处手写展开
+  const applyThemePatch = (patch: Partial<UiTheme>) => {
     commitUiTheme({ ...uiTheme, ...patch });
   };
 
@@ -678,7 +661,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                       step={1}
                       data-wallpaper-opacity="1"
                       value={uiTheme.wallpaperOpacity}
-                      onChange={(event) => onUiThemeChange({ wallpaperOpacity: Number(event.target.value) })}
+                      onChange={(event) => applyThemePatch({ wallpaperOpacity: Number(event.target.value) })}
                       className="w-full accent-[var(--accent)]"
                     />
                   </label>
@@ -694,7 +677,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                       step={1}
                       data-wallpaper-blur="1"
                       value={uiTheme.wallpaperBlur}
-                      onChange={(event) => onUiThemeChange({ wallpaperBlur: Number(event.target.value) })}
+                      onChange={(event) => applyThemePatch({ wallpaperBlur: Number(event.target.value) })}
                       className="w-full accent-[var(--accent)]"
                     />
                   </label>
@@ -710,7 +693,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                       step={1}
                       data-wallpaper-dim="1"
                       value={uiTheme.wallpaperDim}
-                      onChange={(event) => onUiThemeChange({ wallpaperDim: Number(event.target.value) })}
+                      onChange={(event) => applyThemePatch({ wallpaperDim: Number(event.target.value) })}
                       className="w-full accent-[var(--accent)]"
                     />
                   </label>
@@ -726,7 +709,7 @@ export default function Toolbar({ onExportPng, onExportPdf, onExportZip }: Toolb
                       step={1}
                       data-panel-opacity="1"
                       value={uiTheme.panelOpacity}
-                      onChange={(event) => onUiThemeChange({ panelOpacity: Number(event.target.value) })}
+                      onChange={(event) => applyThemePatch({ panelOpacity: Number(event.target.value) })}
                       className="w-full accent-[var(--accent)]"
                     />
                   </label>

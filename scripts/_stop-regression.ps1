@@ -12,6 +12,22 @@ foreach ($p in $browsers) { Stop-Process -Id $p.ProcessId -Force -ErrorAction Si
 
 Start-Sleep -Seconds 2
 
+# 寄存目录（runner 与套件各一层）里的东西要放回原处，
+# 否则中途停下时用户的素材库会一直卡在 .stash 里。
+foreach ($dir in @('uploads', 'config')) {
+  $path = Join-Path $root $dir
+  if (-not (Test-Path $path)) { continue }
+  Get-ChildItem -Path $path -Directory -Force -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -like '.stash*' } |
+    ForEach-Object {
+      $stash = $_
+      Get-ChildItem -Path $stash.FullName -File -Force -ErrorAction SilentlyContinue | ForEach-Object {
+        Move-Item -Force -LiteralPath $_.FullName -Destination (Join-Path $path $_.Name)
+      }
+      Remove-Item -Recurse -Force -LiteralPath $stash.FullName -ErrorAction SilentlyContinue
+    }
+}
+
 foreach ($dir in @('uploads', 'config')) {
   $path = Join-Path $root $dir
   if (-not (Test-Path $path)) { continue }

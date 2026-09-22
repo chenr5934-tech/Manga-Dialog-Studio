@@ -18,10 +18,12 @@ const MOVE_BUTTONS: { move: LayerMove; Icon: ComponentType<{ size?: number }>; l
   { move: "bottom", Icon: IconToBottom, label: "置于底层" }
 ];
 
+// 颜色交给样式表：浅色文字在亮色主题下会糊成一片（实测对比度 1.4），
+// 得按主题各给一组，Tailwind 的 300 系做不到这件事。
 const KIND_STYLE: Record<string, string> = {
-  panel: "bg-sky-400/15 text-sky-300 border-sky-400/30",
-  overlay: "bg-amber-400/15 text-amber-300 border-amber-400/30",
-  bubble: "bg-emerald-400/15 text-emerald-300 border-emerald-400/30"
+  panel: "kind-panel",
+  overlay: "kind-overlay",
+  bubble: "kind-bubble"
 };
 
 export default function LayerPanel() {
@@ -273,8 +275,11 @@ export default function LayerPanel() {
     );
   };
 
+  // 这里原本写着 studio-panel —— 那个类在样式表里从来没有定义过，面板一直是裸的。
+  // 以前页面底色是深蓝渐变，看不出来；换成纯色底、再加上浅色壁纸之后，
+  // 文字就直接浮在壁纸上了。现在和其它面板统一用 studio-surface。
   return (
-    <aside data-layer-panel="1" className="studio-panel flex h-full min-h-0 w-full flex-col overflow-hidden">
+    <aside data-layer-panel="1" className="studio-surface flex h-full min-h-0 w-full flex-col overflow-hidden">
       <div className="flex items-center justify-between gap-2 border-b border-[var(--line-soft)] px-3 py-2.5">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-[var(--text-primary)]">画布内容</p>

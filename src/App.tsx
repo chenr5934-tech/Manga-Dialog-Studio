@@ -11,7 +11,14 @@ import TemplateLibraryModal from "./components/TemplateLibraryModal";
 import ThumbRail from "./components/ThumbRail";
 import Toolbar from "./components/Toolbar";
 import { getActivePage, useEditorStore } from "./lib/store";
-import { applyUiTheme, fetchUiTheme } from "./lib/uiTheme";
+import {
+  DEFAULT_UI_THEME,
+  PRESET_WALLPAPERS,
+  UiTheme,
+  applyUiTheme,
+  fetchUiTheme
+} from "./lib/uiTheme";
+import WallpaperEffect from "./components/WallpaperEffect";
 
 export default function App() {
   const project = useEditorStore((state) => state.project);
@@ -30,6 +37,7 @@ export default function App() {
   const noticeBarRef = useRef<HTMLDivElement | null>(null);
   const activePageNumber = project.pages.findIndex((page) => page.id === project.activePageId) + 1;
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [uiTheme, setUiTheme] = useState<UiTheme>(DEFAULT_UI_THEME);
 
   const exportPng = useCallback(async () => {
     if (!canvasEditorRef.current) {
@@ -110,18 +118,29 @@ export default function App() {
     document.documentElement.dataset.theme = themeMode;
   }, [themeMode]);
 
-  // 启动就把自定义壁纸贴上，别等用户点开「更多」才加载
+  // 界面外观（壁纸 + 面板透明度）放在这里做单一数据源：
+  // 设置面板要改它，背景动效层要读它，一处持有比两边各自 fetch 干净。
   useEffect(() => {
     let alive = true;
     void fetchUiTheme().then((theme) => {
-      if (alive) {
-        applyUiTheme(theme);
+      if (!alive) {
+        return;
       }
+      setUiTheme(theme);
+      applyUiTheme(theme);
     });
     return () => {
       alive = false;
     };
   }, []);
+
+  const commitUiTheme = useCallback((theme: UiTheme) => {
+    setUiTheme(theme);
+    applyUiTheme(theme);
+  }, []);
+
+  // 只有选中带 effect 的背景时才有这一层，其余背景连 canvas 都不存在
+  const wallpaperEffect = PRESET_WALLPAPERS.find((item) => item.id === uiTheme.wallpaper)?.effect;
 
   useEffect(() => {
     if (!historyOpen) {
@@ -150,8 +169,14 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <WallpaperEffect effect={wallpaperEffect} opacity={uiTheme.wallpaperOpacity} />
       <main className="mx-auto flex h-[calc(100vh-28px)] max-w-[1920px] min-w-0 flex-col gap-3 text-[var(--text-primary)]">
-        <Toolbar onExportPng={exportPng} onExportPdf={exportPdf} onExportZip={exportZip} />
+        <Toolbar
+          uiTheme={uiTheme}
+          onUiThemeChange={commitUiTheme}
+          onExportPng={exportPng}
+          onExportPdf={exportPdf}
+          onExportZip={exportZip} />
 
         {/* 四栏的固定宽度合计必须留得下画布：原来是 260+640+336+124+12*3=1396，
             而断点在 1280，于是 1280–1400 这段宽度必出横向滚动条（1280 屏最常见）。

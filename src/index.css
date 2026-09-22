@@ -142,9 +142,60 @@ body {
   outline-offset: 2px;
 }
 
+/* 背景动效层：贴在壁纸之上、压暗层之下，不参与命中测试。
+   不透明度由内联样式跟着「壁纸不透明度」走。 */
+.wallpaper-effect {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  display: block;
+}
+
 /* 数字用等宽字形，读页码、坐标、缩放比例时不会左右抖 */
 .tnum {
   font-variant-numeric: tabular-nums;
+}
+
+/* 类型标记与状态标记。
+   原来直接用 Tailwind 的 300 系当文字色 —— 那是配深色底的浅色，
+   在亮色主题下对比度掉到 1.4，等于看不见。两套主题各给一组。 */
+.kind-panel {
+  background: rgba(56, 189, 248, 0.14);
+  border-color: rgba(56, 189, 248, 0.32);
+  color: #7dd3fc;
+}
+
+.kind-overlay {
+  background: rgba(251, 191, 36, 0.14);
+  border-color: rgba(251, 191, 36, 0.32);
+  color: #fcd34d;
+}
+
+.kind-bubble,
+.kind-ok {
+  background: rgba(52, 211, 153, 0.14);
+  border-color: rgba(52, 211, 153, 0.32);
+  color: #6ee7b7;
+}
+
+:root[data-theme="light"] .kind-panel {
+  background: rgba(2, 132, 199, 0.11);
+  border-color: rgba(2, 132, 199, 0.26);
+  color: #075985;
+}
+
+:root[data-theme="light"] .kind-overlay {
+  background: rgba(180, 83, 9, 0.11);
+  border-color: rgba(180, 83, 9, 0.26);
+  color: #7c2d12;
+}
+
+:root[data-theme="light"] .kind-bubble,
+:root[data-theme="light"] .kind-ok {
+  background: rgba(4, 120, 87, 0.11);
+  border-color: rgba(4, 120, 87, 0.26);
+  color: #065f46;
 }
 
 /* 全站字阶整体抬一档。
